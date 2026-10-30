@@ -4,6 +4,7 @@
 const hojeISO = () => new Date(Date.now()-3*3600e3).toISOString().slice(0,10);
 function resumoItens(etapa, tar, sit, docsFalta){
   tar = tar||{}; sit = sit||{};
+  if(sit.docs_comprovados) docsFalta = 0;
   const fase = (st, ok, txtOk, txtBad) => etapa < st ? {st:'na', det:'Etapa ainda não iniciada'} : etapa === st && !ok ? {st:'na', det:'Em andamento'} : ok ? {st:'ok', det:txtOk} : {st:'bad', det:txtBad};
   const it = [];
   it.push(Object.assign({rot:'Documentos'}, docsFalta ? (etapa===0?{st:'na',det:'Faltam '+docsFalta+' item(ns)'}:{st:'bad',det:'Faltam '+docsFalta+' item(ns)'}) : {st:'ok',det:'Completos'}));
@@ -34,6 +35,7 @@ function bolinhas(itens){ return `<span style="display:inline-flex;gap:4px">${it
 function docsFaltaEquipe(c){ return partesDe(c).reduce((a,x)=>a+pend(x.pessoa_id,x.papel).length,0); }
 const resumoC = c => resumoItens(c.etapa, c.tarefas, c.situacao, docsFaltaEquipe(c));
 
+window.resumoPortalHtml = () => { const d=PS.d; return resumoHtml(resumoItens(d.contrato.etapa, d.contrato.tarefas, d.contrato.situacao, portalPend(d).length)); };
 /* portal: resumo logo abaixo da saudação */
 const portalRenderOrig2 = portalRender;
 portalRender = function(){
