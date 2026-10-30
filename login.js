@@ -216,6 +216,92 @@ document.addEventListener('click', e=>{
   e.stopImmediatePropagation(); baixarZip(t.dataset.zip);
 }, true);
 
+
+/* ---------- pendências herdadas (admin pode avançar, fica em vermelho) ---------- */
+function pendHerdadas(c){
+  const out=[];
+  if(c.etapa>0){ const ps=partesDe(c);
+    ps.forEach(x=>{ const p=P(x.pessoa_id); const l=pend(x.pessoa_id,x.papel); if(l.length) out.push(nomeP(p,x.papel)+': '+l.join(', '));
+      if(c.etapa>1){ const nc=reqDocs(x.papel,p.estado_civil).filter(d=>docSt(x.pessoa_id,d)==='enviado'); if(nc.length) out.push(nomeP(p,x.papel)+': '+nc.length+' documento(s) sem conferência');
+        if(!x.aprovado) out.push(nomeP(p,x.papel)+': ficha não aprovada'); } }); }
+  for(let e=2;e<Math.min(c.etapa,6);e++) (TAREFAS[e]||[]).forEach((t,i)=>{ if(!(c.tarefas||{})[e+'-'+i]) out.push(ETAPAS[e]+': '+t); });
+  return out;
+}
+const cardOrig = card;
+card = function(c){
+  const ph=pendHerdadas(c); let h=cardOrig(c);
+  if(ph.length) h=h.replace('<button class="card"','<button class="card" style="border-color:var(--bad);box-shadow:inset 3px 0 0 var(--bad)"')
+    .replace(/\n  <\/button>$/, `\n    <span class="pill p-bad">${ph.length} pendência${ph.length>1?'s':''} de etapas anteriores</span>\n  </button>`);
+  return h;
+};
+const drawerOrig2 = drawer;
+drawer = function(c){
+  let h=drawerOrig2(c); const ph=pendHerdadas(c);
+  if(ph.length) h=h.replace('<div class="d-body">',`<div class="d-body"><div class="gate" style="background:var(--bad-soft);color:var(--bad)"><div class="gt"><b>Avançou com pendências de etapas anteriores:</b><ul>${ph.map(x=>`<li>${esc(x)}</li>`).join('')}</ul></div></div>`);
+  if(S.me && S.me.papel==='admin' && c.etapa<6 && gate(c).length)
+    h=h.replace('<button class="btn pri" disabled>Avançar etapa</button>',`<button class="btn" style="border-color:var(--bad);color:var(--bad)" data-advforce="${c.id}">Avançar mesmo assim</button>`);
+  return h;
+};
+document.addEventListener('click', e=>{
+  const t=e.target.closest('button[data-advforce]'); if(!t) return; e.stopImmediatePropagation();
+  const c=D.contratos.find(k=>k.id===t.dataset.advforce); const g=gate(c); const nova=c.etapa+1;
+  if(t.dataset.confirma!=='1'){ t.dataset.confirma='1'; t.textContent='Confirmar: avançar com '+g.length+' pendência'+(g.length>1?'s':''); return; }
+  acao(async()=>{ await q(sb.from('contratos').update({etapa:nova}).eq('id',c.id));
+    if(nova===6) await q(sb.from('imoveis').update({status:'Locado'}).eq('id',c.imovel_id));
+    await log(c.id,'Avançou para '+ETAPAS[nova]+' com pendências ('+S.me.nome+'): '+g.join('; ')); }, 'Contrato '+c.numero+' em '+ETAPAS[nova]+' (com pendências em vermelho)');
+}, true);
+
+/* ---------- contratos ativos saem do kanban e ganham aba própria ---------- */
+const kanbanOrig = kanban;
+kanban = function(){
+  const all=D.contratos; D.contratos=all.filter(c=>c.etapa<6);
+  let h; try{ h=kanbanOrig(); } finally{ D.contratos=all; }
+  return h.replace(/<section class="col"><div class="col-h"><div><h3>Ativo<\/h3>[\s\S]*?<\/section>/, '');
+};
+function ativosHtml(){
+  const at=D.contratos.filter(c=>c.etapa===6).sort((a,b)=>b.numero-a.numero);
+  const abertos=cid=>D.chamados.filter(h=>h.contrato_id===cid&&h.status!=='resolvido').length;
+  return `<div class="head"><div><h1>Contratos ativos</h1><p>Locações em vigor. Os clientes destes contratos usam o portal só para chamados.</p></div></div>
+  <div class="tbl-wrap"><table><thead><tr><th>Nº</th><th>Imóvel</th><th>Inquilino</th><th>Proprietário</th><th>Aluguel</th><th>Início</th><th>Chamados</th><th>Situação</th><th></th></tr></thead><tbody>
+  ${at.length?at.map(c=>{const ps=partesDe(c), inq=ps.find(x=>x.papel==='inquilino'), pro=ps.find(x=>x.papel==='proprietario'), ab=abertos(c.id), ph=pendHerdadas(c);
+    return `<tr><td class="mono">${c.numero}</td><td><b>${esc(imvDe(c).titulo)}</b></td><td>${esc(inq?nomeP(P(inq.pessoa_id),'inquilino'):'—')}</td><td>${esc(pro?nomeP(P(pro.pessoa_id),'proprietario'):'—')}</td>
+    <td class="num">${brl(c.aluguel)}</td><td class="num">${dataBR(c.entrada)}</td><td>${ab?`<span class="pill p-warn">${ab} aberto${ab>1?'s':''}</span>`:'<span class="pill p-ok">Nenhum</span>'}</td>
+    <td>${ph.length?`<span class="pill p-bad">${ph.length} pendência${ph.length>1?'s':''}</span>`:'<span class="pill p-ok">Em dia</span>'}</td><td><button class="btn sm" data-open="${c.id}">Abrir</button></td></tr>`}).join(''):'<tr><td colspan="9" class="muted">Nenhum contrato ativo ainda.</td></tr>'}
+  </tbody></table></div>`;
+}
+const renderOrig2 = render;
+render = function(){
+  renderOrig2();
+  if(!S.me || TOKEN) return;
+  const nav=document.querySelector('nav.sub');
+  if(nav && !nav.querySelector('[data-tab="ativos"]')){
+    const n=D.contratos.filter(c=>c.etapa===6).length;
+    nav.querySelector('[data-tab="contratos"]').insertAdjacentHTML('afterend', `<button data-tab="ativos" aria-pressed="${S.tab==='ativos'}">Ativos${n?`<span class="tabn" style="background:var(--ok)">${n}</span>`:''}</button>`);
+  }
+  if(S.tab==='ativos'){
+    nav.querySelectorAll('button').forEach(b=>b.setAttribute('aria-pressed', b.dataset.tab==='ativos'));
+    const w=document.querySelector('#app .wrap'); [...w.children].forEach(ch=>{ if(ch!==nav) ch.remove(); });
+    w.insertAdjacentHTML('beforeend', ativosHtml());
+  }
+};
+document.addEventListener('click', e=>{
+  const t=e.target.closest('button[data-tab="ativos"]'); if(!t) return; e.stopImmediatePropagation();
+  S.tab='ativos'; S.open=null; S.chTeam=null; try{history.replaceState(null,'','#ativos');}catch(_){} render();
+}, true);
+if(!TOKEN && (location.hash||'')==='#ativos') S.tab='ativos';
+
+/* ---------- portal: contrato ativo mostra só chamados ---------- */
+const portalRenderOrig = portalRender;
+portalRender = function(){
+  portalRenderOrig();
+  if(!PS.d || PS.d.contrato.etapa!==6) return;
+  document.querySelectorAll('.portal > *').forEach(el=>{
+    if(el.classList.contains('hello') || el.id==='chamados' || el.classList.contains('lgpd')) return;
+    el.remove();
+  });
+};
+if(TOKEN && PS.d) portalRender();
+
 /* se a tela antiga de login já apareceu, troca pela nova */
 if(!TOKEN && document.getElementById('login')) loginRender();
 if(!TOKEN && S.me) render();
