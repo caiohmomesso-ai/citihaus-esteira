@@ -197,6 +197,7 @@ async function baixarZip(cid){
   if(!window.JSZip) return toast('Recarregue a página e tente de novo.');
   const itens = [];
   partesDe(c).forEach(x=>{ Object.values(D.docs[x.pessoa_id]||{}).forEach(d=>{ if(String(d.drive_url||'').startsWith('storage:')) itens.push({path:d.drive_url.slice(8), nome:PASTAS[x.papel]+'/'+d.arquivo}); }); });
+  { const cc=D.contratos.find(k=>k.id===cid); ((cc&&cc.situacao||{}).resolvidas||[]).forEach((r,i)=>itens.push({path:r.arquivo, nome:'08-Comprovantes/'+String(i+1).padStart(2,'0')+'_'+String(r.pend).replace(/[^\wÀ-ú .-]+/g,' ').slice(0,60).trim()+'.'+r.arquivo.split('.').pop()})); }
   D.chamados.filter(h=>h.contrato_id===cid).forEach(h=>(D.msgs[h.id]||[]).forEach(m=>{ if(String(m.anexo_url||'').startsWith('storage:')) itens.push({path:m.anexo_url.slice(8), nome:'07-Chamados/'+m.anexo}); }));
   if(!itens.length) return toast('Este contrato ainda não tem documentos enviados.');
   document.body.classList.add('sending'); toast('Preparando '+itens.length+' arquivo(s)…');
@@ -219,6 +220,10 @@ document.addEventListener('click', e=>{
 
 /* ---------- pendências herdadas (admin pode avançar, fica em vermelho) ---------- */
 function pendHerdadas(c){
+  const ok=((c.situacao||{}).resolvidas||[]).map(r=>r.pend);
+  return pendTodas(c).filter(x=>!ok.includes(x));
+}
+function pendTodas(c){
   const out=[];
   if(c.etapa>0){ const ps=partesDe(c);
     ps.forEach(x=>{ const p=P(x.pessoa_id); const l=pend(x.pessoa_id,x.papel); if(l.length) out.push(nomeP(p,x.papel)+': '+l.join(', '));
@@ -237,7 +242,9 @@ card = function(c){
 const drawerOrig2 = drawer;
 drawer = function(c){
   let h=drawerOrig2(c); const ph=pendHerdadas(c);
-  if(ph.length) h=h.replace('<div class="d-body">',`<div class="d-body"><div class="gate" style="background:var(--bad-soft);color:var(--bad)"><div class="gt"><b>Avançou com pendências de etapas anteriores:</b><ul>${ph.map(x=>`<li>${esc(x)}</li>`).join('')}</ul></div></div>`);
+  if(ph.length) h=h.replace('<div class="d-body">',`<div class="d-body"><div class="gate" style="background:var(--bad-soft);color:var(--bad)"><div class="gt"><b>Avançou com pendências de etapas anteriores:</b><ul style="list-style:none;padding:0;margin:8px 0 0;display:grid;gap:6px">${ph.map(x=>`<li style="display:flex;align-items:center;gap:8px;flex-wrap:wrap"><span style="width:10px;height:10px;border-radius:50%;background:var(--bad);flex:none"></span><span style="flex:1;min-width:180px">${esc(x)}</span><label class="btn sm" style="border-color:var(--bad);color:var(--bad);cursor:pointer">Resolver com comprovante<input type="file" hidden accept="image/*,.pdf" data-resolvepend="${esc(x)}" data-c="${c.id}"></label></li>`).join('')}</ul><div style="font-size:12px;margin-top:8px;color:var(--fg);opacity:.75">Anexe o arquivo que comprova a correção (termo assinado, laudo, apólice, documento…). O item fica verde e o comprovante fica guardado no contrato.</div></div></div>`);
+  const rs=((c.situacao||{}).resolvidas||[]);
+  if(rs.length) h=h.replace('<div class="d-body">',`<div class="d-body"><div class="gate" style="background:var(--ok-soft);color:var(--ok)"><div class="gt"><b>Pendências resolvidas com comprovante:</b><ul style="list-style:none;padding:0;margin:8px 0 0;display:grid;gap:6px">${rs.map(r=>`<li style="display:flex;align-items:center;gap:8px;flex-wrap:wrap"><span style="width:10px;height:10px;border-radius:50%;background:var(--ok);flex:none"></span><span style="flex:1;min-width:180px;color:var(--fg)">${esc(r.pend)}<span class="muted" style="font-size:12px"> · ${esc(r.por||'')} em ${dataBR(r.em)}</span></span><a class="btn sm" href="storage:${esc(r.arquivo)}">Ver comprovante</a></li>`).join('')}</ul></div></div>`);
   if(S.me && S.me.papel==='admin' && c.etapa<6 && gate(c).length)
     h=h.replace('<button class="btn pri" disabled>Avançar etapa</button>',`<button class="btn" style="border-color:var(--bad);color:var(--bad)" data-advforce="${c.id}">Avançar mesmo assim</button>`);
   return h;
@@ -249,6 +256,31 @@ document.addEventListener('click', e=>{
   acao(async()=>{ await q(sb.from('contratos').update({etapa:nova}).eq('id',c.id));
     if(nova===6) await q(sb.from('imoveis').update({status:'Locado'}).eq('id',c.imovel_id));
     await log(c.id,'Avançou para '+ETAPAS[nova]+' com pendências ('+S.me.nome+'): '+g.join('; ')); }, 'Contrato '+c.numero+' em '+ETAPAS[nova]+' (com pendências em vermelho)');
+}, true);
+
+/* ---------- resolver pendência com comprovante ---------- */
+document.addEventListener('change', e=>{
+  const el=e.target; if(!el.dataset || el.dataset.resolvepend===undefined || !el.files || !el.files[0]) return;
+  e.stopImmediatePropagation();
+  const file=el.files[0], pendTxt=el.dataset.resolvepend, c=D.contratos.find(k=>k.id===el.dataset.c); if(!c) return;
+  if(file.size>15*1024*1024) return toast('Arquivo muito grande (máx. 15 MB)');
+  const ext=((file.name.split('.').pop()||'pdf').toLowerCase().replace(/[^a-z0-9]/g,'')||'pdf').slice(0,5);
+  acao(async()=>{
+    toast('Enviando comprovante…');
+    const path='comprovantes/'+c.id+'/'+Date.now()+'.'+ext;
+    const up=await sb.storage.from('documentos').upload(path, file, {contentType:file.type||undefined, upsert:false});
+    if(up.error) throw up.error;
+    const {data:atual}=await sb.from('contratos').select('situacao,tarefas').eq('id',c.id).single();
+    const sit=Object.assign({}, atual&&atual.situacao||{}); const tar=Object.assign({}, atual&&atual.tarefas||{});
+    sit.resolvidas=(sit.resolvidas||[]).filter(r=>r.pend!==pendTxt).concat([{pend:pendTxt, arquivo:path, nome:file.name, por:S.me.nome, em:new Date().toISOString()}]);
+    let ehTarefa=false;
+    for(let et=2;et<6;et++) (TAREFAS[et]||[]).forEach((t,i)=>{ if(pendTxt===ETAPAS[et]+': '+t){ tar[et+'-'+i]=true; ehTarefa=true; } });
+    const ehEtapa=x=>[2,3,4,5].some(n=>(TAREFAS[n]||[]).some(t=>x===ETAPAS[n]+': '+t));
+    const resto=pendTodas(Object.assign({},c,{tarefas:tar})).filter(x=>!ehEtapa(x) && !sit.resolvidas.some(r=>r.pend===x));
+    sit.docs_comprovados = resto.length===0;
+    await q(sb.from('contratos').update({situacao:sit, tarefas:tar}).eq('id',c.id));
+    await log(c.id,'Pendência resolvida com comprovante ('+S.me.nome+'): '+pendTxt);
+  }, 'Pendência resolvida. Comprovante guardado no contrato.');
 }, true);
 
 /* ---------- contratos ativos saem do kanban e ganham aba própria ---------- */
