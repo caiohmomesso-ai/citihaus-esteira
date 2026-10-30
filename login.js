@@ -258,7 +258,7 @@ kanban = function(){
   let h; try{ h=kanbanOrig(); } finally{ D.contratos=all; }
   return h.replace(/<section class="col"><div class="col-h"><div><h3>Ativo<\/h3>[\s\S]*?<\/section>/, '');
 };
-function ativosHtml(){
+window.ativosHtml = function(){
   const at=D.contratos.filter(c=>c.etapa===6).sort((a,b)=>b.numero-a.numero);
   const abertos=cid=>D.chamados.filter(h=>h.contrato_id===cid&&h.status!=='resolvido').length;
   return `<div class="head"><div><h1>Contratos ativos</h1><p>Locações em vigor. Os clientes destes contratos usam o portal só para chamados.</p></div></div>
@@ -281,7 +281,7 @@ render = function(){
   if(S.tab==='ativos'){
     nav.querySelectorAll('button').forEach(b=>b.setAttribute('aria-pressed', b.dataset.tab==='ativos'));
     const w=document.querySelector('#app .wrap'); [...w.children].forEach(ch=>{ if(ch!==nav) ch.remove(); });
-    w.insertAdjacentHTML('beforeend', ativosHtml());
+    w.insertAdjacentHTML('beforeend', window.ativosHtml());
   }
 };
 document.addEventListener('click', e=>{
@@ -296,7 +296,7 @@ portalRender = function(){
   portalRenderOrig();
   if(!PS.d || PS.d.contrato.etapa!==6) return;
   document.querySelectorAll('.portal > *').forEach(el=>{
-    if(el.classList.contains('hello') || el.id==='chamados' || el.classList.contains('lgpd')) return;
+    if(el.classList.contains('hello') || el.classList.contains('resumo') || el.id==='chamados' || el.classList.contains('lgpd')) return;
     el.remove();
   });
 };
