@@ -241,6 +241,7 @@ function dModalHtml(){
 
   if(m.tipo==='desoc') return desocModal();
   if(m.tipo==='comwa') return comWaModal();
+  if(m.tipo==='drive') return driveModalHtml();
   if(m.tipo==='ativo'){ const livres=D.imoveis.slice().sort((a,b)=>a.titulo.localeCompare(b.titulo)), im=m.imv&&D.imoveis.find(i=>i.id===m.imv), dono=im?P(im.proprietario_id):{};
     const pf=(pre,rot,o={})=>`<label class="f"><span>Nome ${o.req?'<span style="color:var(--bad)">*</span>':''}</span><input id="${pre}-nome" value="${esc(o.v&&o.v.nome||'')}" ${o.req?'required':''}></label>
       <label class="f">Celular (WhatsApp)<input id="${pre}-tel" inputmode="tel" value="${esc(o.v&&o.v.telefone||'')}" placeholder="(17) 9…"></label>
@@ -421,6 +422,9 @@ render = function(){
   if(dr && c && c.prop_token && c.etapa<5 && !document.getElementById('cap-linkprop')){
     const ref=dr.querySelector('.d-body > .sec.box'); if(ref) ref.insertAdjacentHTML('beforebegin', boxLinkProp(c)); }
   if(S.tab==='mensagens') document.querySelectorAll('#app [data-msgdel]').forEach(b=>{ if(!b.previousElementSibling || !b.previousElementSibling.dataset.comwa) b.insertAdjacentHTML('beforebegin', `<button class="btn sm" data-comwa="${b.dataset.msgdel}" style="margin-right:6px">💬 WhatsApp</button>`); });
+  if(S.tab==='captacoes' && isAdm()){ const ib=document.querySelector('#app [data-capinteg]'); if(ib && !document.querySelector('#app [data-capdrive]')) ib.insertAdjacentHTML('beforebegin','<button class="btn" data-capdrive="1">📁 Google Drive</button>'); }
+  if(dr && c && !document.getElementById('cap-drive')){ const s2=dr.querySelector('#cap-s2'); const h3=s2&&s2.firstElementChild;
+    if(h3) h3.insertAdjacentHTML('afterend', `<div id="cap-drive" style="display:flex;gap:8px;align-items:center;background:var(--info-soft);border-radius:10px;padding:8px 12px;margin-bottom:10px;font-size:12.5px">📁 <span>Pasta no Drive: <b>Citihaus · Captações / ${esc(capNome(c))}</b>. As fotos que entrarem lá aparecem aqui sozinhas.</span></div>`); }
   if(S.dModal) layer.insertAdjacentHTML('beforeend', dModalHtml());
 };
 
@@ -429,6 +433,7 @@ document.addEventListener('click', e=>{
   const b=e.target.closest('button'); if(!b) return; const d=b.dataset;
   if(d.tab && d.tab!=='acessos' && !pode(d.tab)){ e.stopImmediatePropagation(); return toast('Aba desligada para o seu usuário'); }
   if(d.dscroll){ e.stopImmediatePropagation(); const t=document.getElementById(d.dscroll); if(t) t.scrollIntoView({behavior:'smooth'}); return; }
+  if(d.capdrive){ e.stopImmediatePropagation(); driveModal(); return; }
   if(d.comwa){ e.stopImmediatePropagation(); S.dModal={tipo:'comwa', m:d.comwa}; return render(); }
   if(d.dativo){ e.stopImmediatePropagation(); S.open=null; S.dModal={tipo:'ativo', gar:'Fiador'}; return render(); }
   if(d.dvenda){ e.stopImmediatePropagation(); S.dModal={tipo:'venda'}; return render(); }
@@ -613,6 +618,30 @@ document.addEventListener('submit', e=>{
   const sit=Object.assign({}, c.situacao||{}, {fim:g('pz-fim')||null, indice:g('pz-ind')||null});
   acao(async()=>{ await q(sb.from('contratos').update({situacao:sit, entrada:g('pz-ini')||null}).eq('id',c.id)); }, 'Prazo e reajuste salvos');
 }, true);
+
+/* ---------- Google Drive → fotos da captação ---------- */
+const DRIVE_SCRIPT = "/** Citihaus \u00b7 Fotos das capta\u00e7\u00f5es: Google Drive \u2192 Meu Contrato\n *  1) Cole este c\u00f3digo em script.google.com (Novo projeto) e salve.\n *  2) Escolha a fun\u00e7\u00e3o \"instalar\" e clique em Executar (autorize o acesso ao seu Drive).\n *  Pronto: a cada 10 minutos o script cria uma pasta para cada capta\u00e7\u00e3o aberta e envia as fotos novas. */\nconst URL_API = '__URL__';\nconst TOKEN = '__TOKEN__';\nconst PASTA_RAIZ = 'Citihaus \u00b7 Capta\u00e7\u00f5es'; // pasta principal no seu Drive (\u00e9 criada se n\u00e3o existir)\n\nfunction instalar() {\n  ScriptApp.getProjectTriggers().forEach(t => ScriptApp.deleteTrigger(t));\n  ScriptApp.newTrigger('sincronizar').timeBased().everyMinutes(10).create();\n  sincronizar();\n}\n\nfunction sincronizar() {\n  const lock = LockService.getScriptLock(); if (!lock.tryLock(1000)) return;\n  try {\n    const it = DriveApp.getFoldersByName(PASTA_RAIZ), raiz = it.hasNext() ? it.next() : DriveApp.createFolder(PASTA_RAIZ);\n    const r = UrlFetchApp.fetch(URL_API + '?k=' + TOKEN, { muteHttpExceptions: true });\n    if (r.getResponseCode() !== 200) { console.log('Meu Contrato: ' + r.getContentText()); return; }\n    const caps = JSON.parse(r.getContentText()).captacoes || [];\n    const pastas = {}, fs = raiz.getFolders();\n    while (fs.hasNext()) { const f = fs.next(), m = f.getName().match(/CAP-?0*(\\d+)/i); if (m) pastas[+m[1]] = f; }\n    caps.forEach(c => { if (!pastas[c.numero]) pastas[c.numero] = raiz.createFolder(c.nome); });\n    const props = PropertiesService.getScriptProperties(), t0 = Date.now();\n    Object.keys(pastas).forEach(n => enviarPasta_(+n, pastas[n], props, t0, 0));\n  } finally { lock.releaseLock(); }\n}\n\nfunction enviarPasta_(numero, pasta, props, t0, nivel) {\n  const files = pasta.getFiles();\n  while (files.hasNext()) {\n    if (Date.now() - t0 > 5 * 60 * 1000) return; // o Google limita cada execu\u00e7\u00e3o a 6 minutos\n    const f = files.next(), id = f.getId();\n    if (!/^image\\//.test(f.getMimeType()) || props.getProperty('ok_' + id)) continue;\n    let blob = null;\n    try { // vers\u00e3o reduzida (2000 px, JPEG) gerada pelo pr\u00f3prio Drive\n      const tk = { Authorization: 'Bearer ' + ScriptApp.getOAuthToken() };\n      const meta = JSON.parse(UrlFetchApp.fetch('https://www.googleapis.com/drive/v3/files/' + id + '?fields=thumbnailLink', { headers: tk }).getContentText());\n      if (meta.thumbnailLink) { const th = UrlFetchApp.fetch(meta.thumbnailLink.replace(/=s\\d+$/, '=s2000'), { headers: tk, muteHttpExceptions: true }); if (th.getResponseCode() === 200) blob = th.getBlob(); }\n    } catch (e) { }\n    if (!blob) { if (f.getSize() > 12e6) { console.log(f.getName() + ': muito grande'); continue; } blob = f.getBlob(); }\n    const res = UrlFetchApp.fetch(URL_API + '?k=' + TOKEN, { method: 'post', contentType: 'application/json', muteHttpExceptions: true,\n      payload: JSON.stringify({ numero: numero, id: id, nome: f.getName(), mime: blob.getContentType() || 'image/jpeg', base64: Utilities.base64Encode(blob.getBytes()) }) });\n    if (res.getResponseCode() === 200) props.setProperty('ok_' + id, '1'); else console.log(f.getName() + ': ' + res.getContentText());\n  }\n  if (nivel < 1) { const sub = pasta.getFolders(); while (sub.hasNext()) enviarPasta_(numero, sub.next(), props, t0, nivel + 1); }\n}\n";
+const capNome = c => { const f=c.ficha||{}; const r=[f.categoria, f.condominio||f.bairro].filter(Boolean).join(' · ') || P(c.proprietario_id).nome || 'Captação';
+  return 'CAP-'+String(c.numero).padStart(3,'0')+' · '+String(r).replace(/[\/\\:*?"<>|]/g,'-').slice(0,60); };
+async function driveModal(){
+  let cfg=null; try{ cfg=await q(sb.rpc('admin_drive_config')); }catch(e){ return falha(e); }
+  S.dModal={tipo:'drive', cfg}; render();
+}
+function driveModalHtml(){ const cfg=S.dModal.cfg||{}, code=DRIVE_SCRIPT.replace('__URL__',cfg.url||'').replace('__TOKEN__',cfg.token||'');
+  return `<div class="ov center"><div class="modal" style="width:min(680px,calc(100% - 32px))">
+  <div class="m-h"><span class="mono" style="color:var(--accent-ink)">Administrador</span><h2 style="font-size:19px;margin-top:4px">📁 Fotos pelo Google Drive</h2>
+    <p class="muted" style="margin:4px 0 0;font-size:12.5px">O fotógrafo ou o corretor sobe as fotos na pasta da captação no seu Drive e elas aparecem sozinhas na etapa Imagens (a cada 10 minutos).</p></div>
+  <div class="m-b" style="display:block">
+    <div style="display:grid;gap:8px;font-size:13.5px">
+      <div>1️⃣ Abra <a href="https://script.google.com/home/projects/create" target="_blank" rel="noopener"><b>script.google.com</b> → Novo projeto</a>, apague o que estiver lá e cole o código abaixo.</div>
+      <div>2️⃣ Salve (💾), escolha a função <b>instalar</b> no menu de cima e clique em <b>Executar</b>. Autorize o acesso ao seu Drive.</div>
+      <div>3️⃣ Pronto. No seu Drive aparece a pasta <b>Citihaus · Captações</b> com uma subpasta para cada captação aberta (ex.: <i>CAP-007 · Casa · Damha</i>). É só soltar as fotos lá.</div>
+    </div>
+    <div class="note" style="margin:12px 0">O site reconhece o imóvel pelo código <b>CAP-000</b> no nome da pasta. Pode criar subpastas dentro dela. Fotos repetidas não duplicam. O script reduz cada foto para 2000 px antes de enviar.</div>
+    <textarea readonly id="drive-code" style="width:100%;height:220px;font:12px/1.4 var(--f-mono,monospace);border:1px solid var(--line);border-radius:10px;padding:10px;background:var(--bg)">${esc(code)}</textarea>
+    <div class="muted" style="font-size:12px;margin-top:6px">${cfg.total?`✅ ${cfg.total} foto(s) já recebidas pelo Drive · última em ${dtBR(cfg.ultima)}`:'Ainda nenhuma foto recebida pelo Drive.'} · O código tem uma chave própria: não compartilhe.</div>
+  </div>
+  <div class="m-f"><button type="button" class="btn" data-dmclose="1">Fechar</button><button type="button" class="btn pri" data-copytxt="${esc(code)}">Copiar código</button></div></div></div>`; }
 
 if(S.me) carregar().then(render).catch(()=>{});
 })();
