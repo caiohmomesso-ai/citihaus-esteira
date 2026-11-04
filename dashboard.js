@@ -45,7 +45,7 @@ function carteira(){
   const vend=vendidas(), C=(D.captacoes||[]);
   const venda=C.filter(c=>c.finalidade!=='Locação' && !vend.has(c.id) && num(c.ficha&&c.ficha.valor_venda));
   const loc=C.filter(c=>c.finalidade!=='Venda' && num(c.ficha&&c.ficha.valor_locacao));
-  const imv=D.imoveis.filter(i=>i.status==='Disponível' && Number(i.aluguel));
+  const imv=D.imoveis.filter(i=>i.status==='Disponível' && Number(i.aluguel) && !i.captacao_id);
   const ativos=D.contratos.filter(c=>c.etapa===6 && !encerrado(c));
   return {
     vgv: venda.reduce((s,c)=>s+num(c.ficha.valor_venda),0), nVgv: venda.length,
@@ -470,7 +470,7 @@ document.addEventListener('submit', e=>{
   if(f.id==='f-dvenda'){ e.preventDefault(); e.stopImmediatePropagation();
     const valor=num(g('dv-val')); if(!valor) return toast('Informe o valor da venda');
     return acao(async()=>{ await q(sb.from('vendas').insert({captacao_id:g('dv-cap')||null, imovel:g('dv-imv'), valor, data:g('dv-data'), corretor:g('dv-cor'), comissao:num(g('dv-com'))||null, obs:g('dv-obs')||null, criado_por:S.me.nome}));
-      if(g('dv-cap')) await q(sb.from('captacao_hist').insert({captacao_id:g('dv-cap'), texto:'Venda registrada por '+S.me.nome+': '+brl(valor)}));
+      if(g('dv-cap')){ await q(sb.from('captacao_hist').insert({captacao_id:g('dv-cap'), texto:'Venda registrada por '+S.me.nome+': '+brl(valor)})); await q(sb.from('imoveis').update({status:'Vendido'}).eq('captacao_id', g('dv-cap'))); }
       S.dModal=null; }, 'Venda registrada 🎉'); }
   if(f.id==='f-dmetas'){ e.preventDefault(); e.stopImmediatePropagation(); const M=S.dMes, A=S.dAno, rep=f.querySelector('#mt-rep').checked;
     const rows=[]; const add=(mes,tipo,cor,id)=>rows.push({ano:A, mes, tipo, corretor:cor, valor:num(g(id))});
@@ -642,6 +642,34 @@ function driveModalHtml(){ const cfg=S.dModal.cfg||{}, code=DRIVE_SCRIPT.replace
     <div class="muted" style="font-size:12px;margin-top:6px">${cfg.total?`✅ ${cfg.total} foto(s) já recebidas pelo Drive · última em ${dtBR(cfg.ultima)}`:'Ainda nenhuma foto recebida pelo Drive.'} · O código tem uma chave própria: não compartilhe.</div>
   </div>
   <div class="m-f"><button type="button" class="btn" data-dmclose="1">Fechar</button><button type="button" class="btn pri" data-copytxt="${esc(code)}">Copiar código</button></div></div></div>`; }
+
+/* ---------- Imóveis: base única (locação + venda), captações publicadas entram sozinhas ---------- */
+S.imvFil = S.imvFil || 'todos';
+imoveis = function(){
+  const fil=S.imvFil, L=D.imoveis.filter(i=>fil==='todos'||(fil==='venda'?i.finalidade!=='Locação':i.finalidade!=='Venda')).sort((a,b)=>String(b.created_at||'').localeCompare(String(a.created_at||'')));
+  const n=k=>D.imoveis.filter(i=>k==='todos'||(k==='venda'?i.finalidade!=='Locação':i.finalidade!=='Venda')).length;
+  return `<div class="head"><div><h1>Base de imóveis</h1><p>Imóveis para alugar e vender. As captações publicadas entram aqui sozinhas.</p></div><button class="btn pri" data-newimv="1">+ Cadastrar imóvel</button></div>
+  <div class="seg-b" style="margin:4px 0 14px">${[['todos','Todos'],['locacao','🔑 Locação'],['venda','🏷️ Venda']].map(([k,v])=>`<button data-imvfil="${k}" aria-pressed="${fil===k}">${v} (${n(k)})</button>`).join('')}</div>
+  ${L.length?'':'<div class="empty" style="margin-top:18px">Nenhum imóvel aqui ainda.</div>'}
+  <div class="grid">${L.map(i=>{ const p=P(i.proprietario_id); const cl=i.status==='Disponível'?'p-ok':i.status==='Vendido'?'p-info':['Locado','Inativo'].includes(i.status)?'p-mute':'p-acc';
+   const c=D.contratos.filter(c=>c.imovel_id===i.id).sort((a,b)=>b.numero-a.numero)[0], loc=i.finalidade!=='Venda', ven=i.finalidade!=='Locação';
+   const cap=i.captacao_id&&(D.captacoes||[]).find(k=>k.id===i.captacao_id);
+   return `<article class="imv"><div class="imv-top"><span class="tipo">${esc(i.tipo)}</span><span class="mono">${esc(i.detalhe)}</span></div>
+   <div class="imv-b"><h4>${esc(i.titulo)}</h4><div class="meta muted">${esc([i.endereco,i.bairro].filter(Boolean).join(' · '))}</div>
+   <div class="meta muted">Proprietário: ${esc(p.nome||'—')}</div>
+   <div class="row" style="flex-wrap:wrap;gap:6px"><span class="pill ${cl}">${esc(i.status)}</span><span class="pill p-mute">${loc&&ven?'Venda e locação':ven?'Venda':'Locação'}</span>${i.loft_codigo?`<span class="pill p-acc">Loft ${esc(i.loft_codigo)}</span>`:''}${cap?`<button class="btn sm ghost" data-capopen2="${cap.id}">Ver captação</button>`:''}<button class="btn sm ghost" data-editimv="${i.id}">Editar</button></div>
+   <div class="imv-f"><span class="price">${ven&&i.valor_venda?brl(i.valor_venda):''}${ven&&i.valor_venda&&loc&&Number(i.aluguel)?' <small>·</small> ':''}${loc&&Number(i.aluguel)?brl(i.aluguel)+' <small>/mês</small>':''}${!(ven&&i.valor_venda)&&!(loc&&Number(i.aluguel))?'<small class="muted">sem valor</small>':''}</span>
+   ${i.status==='Disponível'&&loc?`<button class="btn pri sm" data-new="${i.id}">Iniciar contrato</button>`:c&&i.status!=='Inativo'?`<button class="btn sm" data-open="${c.id}" data-go="1">Ver contrato</button>`:''}</div></div></article>`; }).join('')}</div>`;
+};
+document.addEventListener('click', e=>{ const b=e.target.closest('button'); if(!b) return;
+  if(b.dataset.imvfil){ e.stopImmediatePropagation(); S.imvFil=b.dataset.imvfil; return render(); }
+  if(b.dataset.capopen2){ e.stopImmediatePropagation(); S.tab='captacoes'; S.capOpen=b.dataset.capopen2; try{history.replaceState(null,'','#captacoes');}catch(_){} return render(); }
+}, true);
+
+const modalImvOrig = modalHtml;
+modalHtml = function(){ const h=modalImvOrig(), m=S.modal;
+  if(m && h.includes('id="i-st"')){ const i=D.imoveis.find(x=>x.id===m.id)||{}; return h.replace(/(<select id="i-st">[\s\S]*?)<\/select>/, (all,a)=>a+`<option ${i.status==='Vendido'?'selected':''}>Vendido</option></select>`); }
+  return h; };
 
 if(S.me) carregar().then(render).catch(()=>{});
 })();
