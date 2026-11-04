@@ -170,9 +170,10 @@ function dashHtml(){
   </div>
   <div class="box" style="margin-top:10px"><h2>🔔 Follow-up · o que fazer agora</h2>
     ${tc.acao.length?`<div style="display:grid;gap:8px">${tc.acao.map(a=>{ const p=P(a.h.pessoa_id), cl=a.tipo==='atrasado'?'p-bad':a.tipo==='followup'?'p-acc':'p-warn';
-      return `<button class="card" data-chteam="${a.h.id}" style="flex-direction:row;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap">
+      const xp=parteDe(a.h.contrato_id,a.h.pessoa_id), wmsg=`Olá${p.nome?', '+primeiro(p.nome):''}! Aqui é da Citihaus 🧡\n`+(a.tipo==='followup'?`Passando para saber sobre o seu chamado ${a.h.protocolo} (${a.h.titulo}). Conseguiu ver a nossa última mensagem?`:`Recebemos o seu chamado ${a.h.protocolo} (${a.h.titulo}) e já estamos cuidando.`)+(xp?`\n\nAcompanhe por aqui: ${linkPortal(xp.token)}`:'');
+      return `<div style="display:flex;gap:8px;align-items:stretch;flex-wrap:wrap"><button class="card" data-chteam="${a.h.id}" style="flex:1;min-width:240px;flex-direction:row;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap">
         <div style="min-width:0"><span class="code">${esc(a.h.protocolo)}</span><h4>${esc(a.h.titulo)}</h4><span class="meta">${esc(nomeP(p,a.h.papel))} · ${esc(a.h.tipo)}</span></div>
-        <span class="pill ${cl}">${esc(a.txt)}</span></button>`; }).join('')}</div>`:'<div class="empty">Tudo respondido. Nenhum chamado esperando a equipe ou parado com o cliente. 👏</div>'}</div>
+        <span class="pill ${cl}">${esc(a.txt)}</span></button><div style="display:flex;align-items:center">${waBtn(p.telefone, wmsg, a.tipo==='followup'?'Cobrar retorno':'Avisar cliente')}</div></div>`; }).join('')}</div>`:'<div class="empty">Tudo respondido. Nenhum chamado esperando a equipe ou parado com o cliente. 👏</div>'}</div>
 
   <h2 style="font-size:16px;margin:22px 0 10px">📝 Tempo dos contratos de locação</h2>
   <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(340px,1fr));gap:14px;align-items:start">
@@ -239,6 +240,7 @@ function dModalHtml(){
   }
 
   if(m.tipo==='desoc') return desocModal();
+  if(m.tipo==='comwa') return comWaModal();
   if(m.tipo==='ativo'){ const livres=D.imoveis.slice().sort((a,b)=>a.titulo.localeCompare(b.titulo)), im=m.imv&&D.imoveis.find(i=>i.id===m.imv), dono=im?P(im.proprietario_id):{};
     const pf=(pre,rot,o={})=>`<label class="f"><span>Nome ${o.req?'<span style="color:var(--bad)">*</span>':''}</span><input id="${pre}-nome" value="${esc(o.v&&o.v.nome||'')}" ${o.req?'required':''}></label>
       <label class="f">Celular (WhatsApp)<input id="${pre}-tel" inputmode="tel" value="${esc(o.v&&o.v.telefone||'')}" placeholder="(17) 9…"></label>
@@ -305,6 +307,73 @@ pend = function(pid, papel){
   return pendOrig(pid, papel);
 };
 
+
+/* ---------- WhatsApp: toda notificação abre a conversa já com a mensagem ---------- */
+const waNum = tel => { let d=String(tel||'').replace(/\D/g,''); if(d.length>=12 && d.startsWith('55')) return d; if(d.length===10||d.length===11) return '55'+d; return null; };
+const waUrl = (tel, msg) => { const n=waNum(tel); return n ? `https://wa.me/${n}?text=${encodeURIComponent(msg||'')}` : null; };
+const waBtn = (tel, msg, rot='WhatsApp', cls='btn sm') => { const u=waUrl(tel,msg);
+  return u ? `<a class="${cls}" style="text-decoration:none;color:#fff;background:#25D366;border-color:#25D366" target="_blank" rel="noopener" href="${esc(u)}">💬 ${esc(rot)}</a>`
+           : `<span class="pill p-mute" title="Cadastre o celular para enviar pelo WhatsApp">💬 sem celular</span>`; };
+window.waBtn = waBtn; window.waUrl = waUrl;
+const primeiro = n => String(n||'').trim().split(' ')[0];
+const parteDe = (cid, pid) => D.partes.find(x=>x.contrato_id===cid && x.pessoa_id===pid);
+function msgParte(c, x){
+  const p=P(x.pessoa_id), im=imvDe(c), link=linkPortal(x.token), oi=`Olá${p.nome?', '+primeiro(p.nome):''}! Aqui é da Citihaus 🧡`;
+  const falta=pend(x.pessoa_id,x.papel), redo=Object.values(D.docs[x.pessoa_id]||{}).filter(o=>o.status==='refazer');
+  const ped = (falta.length?`\n\nFalta enviar: ${falta.join(', ')}.`:'') + (redo.length?`\nPrecisamos que reenvie: ${redo.map(o=>(DOC[o.tipo]||o.tipo)+(o.obs?' ('+o.obs+')':'')).join('; ')}.`:'');
+  const d=dsc(c);
+  if(d && d.etapa<4) return `${oi}\nSobre a desocupação do ${im.titulo}: estamos na etapa “${DE[d.etapa]}”${d.saida_prevista?', com saída prevista para '+dataBR(d.saida_prevista):''}.${d.etapa===1&&d.vistoria?' A vistoria de saída está marcada para '+dataBR(d.vistoria)+'.':''}\nAcompanhe pelo portal: ${link}`;
+  if(d) return `${oi}\nO contrato do ${im.titulo} foi encerrado em ${dataBR(d.encerrado_em)}. Obrigado pela parceria!`;
+  if(c.etapa===0) return msgWhats(c,x) + ped;
+  if(c.etapa===6) return `${oi}\nSeu contrato do ${im.titulo} está ativo ✅. Pelo portal você abre chamados e acompanha tudo: ${link}`;
+  const ce=CLIENTE_ETAPAS[c.etapa]||[ETAPAS[c.etapa],''];
+  return `${oi}\nAtualização da locação do ${im.titulo}: agora estamos em “${ce[0]}”. ${ce[1]}.${ped}\n\nAcompanhe pelo portal: ${link}`;
+}
+const parteWaOrig = parteHtml;
+parteHtml = function(c, x){
+  const h=parteWaOrig(c, x), p=P(x.pessoa_id);
+  return h.replace(`<button class="btn sm" data-copyp="${x.id}">`, waBtn(p.telefone, msgParte(c,x), 'Enviar no WhatsApp') + `<button class="btn sm" data-copyp="${x.id}">`);
+};
+const chDrawerWaOrig = chDrawer;
+chDrawer = function(h){
+  const out=chDrawerWaOrig(h), p=P(h.pessoa_id), x=parteDe(h.contrato_id, h.pessoa_id);
+  const msg=`Olá${p.nome?', '+primeiro(p.nome):''}! Aqui é da Citihaus 🧡\nSobre o seu chamado ${h.protocolo} (${h.titulo}): `+(x?`\n\nVocê acompanha e responde por aqui: ${linkPortal(x.token)}`:'');
+  return out.replace('<div class="d-body">', `<div class="d-body"><div class="row" style="gap:8px">${waBtn(p.telefone, msg, 'Falar com '+(primeiro(p.nome)||'o cliente')+' no WhatsApp')}</div>`);
+};
+const modalWaOrig = modalHtml;
+modalHtml = function(){
+  const h=modalWaOrig(), m=S.modal;
+  if(m && m.tipo==='pronto' && m.texto){ const t=(m.texto.match(/Celular:\s*([^\n]+)/)||[])[1];
+    if(t) return h.replace('<button type="button" class="btn pri" data-copytxt=', waBtn(t, m.texto, 'Enviar no WhatsApp', 'btn')+'<button type="button" class="btn pri" data-copytxt='); }
+  return h;
+};
+function msgDesoc(c, papel){
+  const d=dsc(c), im=imvDe(c), x=partesDe(c).find(k=>k.papel===papel); if(!x) return null; const p=P(x.pessoa_id), oi=`Olá${p.nome?', '+primeiro(p.nome):''}! Aqui é da Citihaus 🧡\n`;
+  const prev=d.saida_prevista?dataBR(d.saida_prevista):'a combinar';
+  const T = papel==='inquilino' ? [
+    `Recebemos seu aviso de saída do ${im.titulo}. A saída está prevista para ${prev}. Em breve vamos agendar a vistoria de saída com você.`,
+    `A vistoria de saída do ${im.titulo} ${d.vistoria?'está marcada para '+dataBR(d.vistoria):'precisa ser agendada. Qual o melhor dia e horário para você?'}. O imóvel precisa estar vazio e limpo, nas mesmas condições da vistoria de entrada.`,
+    `Estamos fazendo o acerto final do ${im.titulo}${d.acerto?': valor de '+brl(num(d.acerto)):''}. Lembre de enviar as contas finais quitadas de energia, água e gás.`,
+    `Tudo pronto para a entrega das chaves do ${im.titulo}. Vamos combinar o dia para você devolver as chaves e assinar o termo de entrega?`,
+    `As chaves do ${im.titulo} foram devolvidas e o contrato foi encerrado. Obrigado por ter sido nosso cliente!`]
+  : [
+    `O inquilino do ${im.titulo} avisou a saída, prevista para ${prev}. Vamos cuidar da vistoria de saída e do acerto, e mantemos você informado.`,
+    `A vistoria de saída do ${im.titulo} ${d.vistoria?'está marcada para '+dataBR(d.vistoria):'será agendada nos próximos dias'}. Depois enviamos o laudo comparando com a vistoria de entrada.`,
+    `Estamos no acerto final do ${im.titulo} (reparos, contas e aluguel proporcional). Assim que fechar, enviamos o resumo para você.`,
+    `As chaves do ${im.titulo} estão sendo devolvidas pelo inquilino. Logo o imóvel estará liberado.`,
+    `O ${im.titulo} foi desocupado e as chaves estão com a Citihaus. Já podemos anunciar para uma nova locação. Vamos conversar?`];
+  return {tel:p.telefone, txt: oi+T[Math.min(d.etapa,4)], nome:primeiro(p.nome)||papel};
+}
+
+function comDest(m){ const ps=D.partes.filter(x=>m.publico==='todos'||m.publico===x.papel||(m.publico==='parte'&&x.id===m.parte_id)||(m.publico==='varios'&&(m.parte_ids||[]).includes(x.id)));
+  const vistos=new Set(); return ps.filter(x=>{ if(vistos.has(x.pessoa_id)) return false; vistos.add(x.pessoa_id); return true; }); }
+function comWaModal(){ const m=(D.comunicados||[]).find(k=>k.id===S.dModal.m); if(!m) return ''; const L=comDest(m);
+  return `<div class="ov center"><div class="modal" style="width:min(560px,calc(100% - 32px))"><div class="m-h"><span class="mono" style="color:var(--accent-ink)">Mensagens</span><h2 style="font-size:19px;margin-top:4px">💬 Enviar “${esc(m.titulo)}” pelo WhatsApp</h2>
+    <p class="muted" style="margin:4px 0 0;font-size:12.5px">Cada botão abre a conversa com a mensagem pronta. ${L.length} pessoa${L.length===1?'':'s'}.</p></div>
+    <div class="m-b" style="display:block">${L.map(x=>{ const p=P(x.pessoa_id), txt=`Olá${p.nome?', '+primeiro(p.nome):''}! ${m.titulo}\n\n${m.texto}\n\nCitihaus 🧡 · ${linkPortal(x.token)}`;
+      return `<div class="row between" style="padding:8px 0;border-bottom:1px solid var(--line);gap:8px"><div><b>${esc(p.nome||'Sem nome')}</b><div class="muted" style="font-size:12px">${esc(PAPEL[x.papel])}${p.telefone?' · '+esc(p.telefone):''}</div></div>${waBtn(p.telefone, txt, 'Enviar')}</div>`; }).join('')||'<div class="empty">Ninguém recebe esta mensagem.</div>'}</div>
+    <div class="m-f"><button type="button" class="btn" data-dmclose="1">Fechar</button></div></div></div>`; }
+
 /* ---------- Configuração: acessos por pessoa ---------- */
 function configHtml(){
   const eq=(D.eqAll||[]).filter(e=>e.papel!=='admin'), abas=Object.keys(ABA_NOME);
@@ -351,6 +420,7 @@ render = function(){
   const dr=document.getElementById('cap-drawer'), c=S.capOpen && (D.captacoes||[]).find(k=>k.id===S.capOpen);
   if(dr && c && c.prop_token && c.etapa<5 && !document.getElementById('cap-linkprop')){
     const ref=dr.querySelector('.d-body > .sec.box'); if(ref) ref.insertAdjacentHTML('beforebegin', boxLinkProp(c)); }
+  if(S.tab==='mensagens') document.querySelectorAll('#app [data-msgdel]').forEach(b=>{ if(!b.previousElementSibling || !b.previousElementSibling.dataset.comwa) b.insertAdjacentHTML('beforebegin', `<button class="btn sm" data-comwa="${b.dataset.msgdel}" style="margin-right:6px">💬 WhatsApp</button>`); });
   if(S.dModal) layer.insertAdjacentHTML('beforeend', dModalHtml());
 };
 
@@ -359,6 +429,7 @@ document.addEventListener('click', e=>{
   const b=e.target.closest('button'); if(!b) return; const d=b.dataset;
   if(d.tab && d.tab!=='acessos' && !pode(d.tab)){ e.stopImmediatePropagation(); return toast('Aba desligada para o seu usuário'); }
   if(d.dscroll){ e.stopImmediatePropagation(); const t=document.getElementById(d.dscroll); if(t) t.scrollIntoView({behavior:'smooth'}); return; }
+  if(d.comwa){ e.stopImmediatePropagation(); S.dModal={tipo:'comwa', m:d.comwa}; return render(); }
   if(d.dativo){ e.stopImmediatePropagation(); S.open=null; S.dModal={tipo:'ativo', gar:'Fiador'}; return render(); }
   if(d.dvenda){ e.stopImmediatePropagation(); S.dModal={tipo:'venda'}; return render(); }
   if(d.dmetas){ e.stopImmediatePropagation(); S.dModal={tipo:'metas'}; return render(); }
@@ -460,6 +531,7 @@ function desocSecao(c){
   return `<div class="sec box" id="desoc-box" style="border-color:var(--amber)"><div class="row between" style="margin-bottom:8px"><h3 style="margin:0">🚚 Desocupação · ${DE_IC[Math.min(d.etapa,4)]} ${DE[Math.min(d.etapa,4)]}</h3><span class="pill p-acc">${esc(d.motivo||'')}</span></div>
     <div style="display:flex;gap:4px;margin-bottom:12px">${passos}</div>
     ${gate}
+    <div class="row" style="gap:8px;margin-top:10px;flex-wrap:wrap"><span class="muted" style="font-size:12.5px">Avisar sobre esta etapa:</span>${['inquilino','proprietario'].map(pp=>{ const mm=msgDesoc(c,pp); return mm?waBtn(mm.tel, mm.txt, (pp==='inquilino'?'Inquilino':'Proprietário')+' · '+mm.nome):''; }).join('')}</div>
     <form id="f-desoc" data-c="${c.id}" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;align-items:end;margin-top:12px">
       <label class="f">Aviso recebido em<input id="ds-aviso" type="date" value="${esc(d.aviso||'')}"></label>
       <label class="f">Saída prevista<input id="ds-saida" type="date" value="${esc(d.saida_prevista||'')}"></label>
