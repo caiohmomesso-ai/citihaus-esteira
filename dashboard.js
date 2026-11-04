@@ -595,5 +595,24 @@ document.addEventListener('submit', e=>{
     return acao(async()=>{ await salvarDesoc(c, {aviso:g('ds-aviso')||null, saida_prevista:g('ds-saida')||null, vistoria:g('ds-vist')||null, multa:g('ds-multa'), acerto:g('ds-acerto'), obs:g('ds-obs')}); }, 'Dados da desocupação salvos'); }
 }, true);
 
+/* prazo do contrato e índice de reajuste (aparecem no resumo do portal) */
+const drawerPrazoOrig = drawer;
+drawer = function(c){
+  const h=drawerPrazoOrig(c), sit=c.situacao||{};
+  const f=`<div class="sec"><h3>Prazo e reajuste</h3><form id="f-prazo" data-c="${c.id}" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;align-items:end">
+    <label class="f">Início<input id="pz-ini" type="date" value="${esc(c.entrada||'')}"></label>
+    <label class="f">Término do contrato<input id="pz-fim" type="date" value="${esc(sit.fim||'')}"></label>
+    <label class="f">Índice de reajuste<select id="pz-ind">${['','IGP-M','IPCA','IVAR','INPC'].map(x=>`<option value="${x}" ${(sit.indice||'')===x?'selected':''}>${x||'—'}</option>`).join('')}</select></label>
+    <button class="btn" type="submit">Salvar prazo</button></form>
+    <div class="muted" style="font-size:12px;margin-top:6px">O cliente vê no portal quanto falta para o fim e para o próximo reajuste (a cada 12 meses do início). Sem término, o portal estima 30 meses.</div></div>`;
+  return h.replace('<div class="sec"><h3>Partes do contrato</h3>', f+'<div class="sec"><h3>Partes do contrato</h3>');
+};
+document.addEventListener('submit', e=>{
+  const f=e.target; if(f.id!=='f-prazo') return; e.preventDefault(); e.stopImmediatePropagation();
+  const c=D.contratos.find(k=>k.id===f.dataset.c), g=id=>f.querySelector('#'+id).value;
+  const sit=Object.assign({}, c.situacao||{}, {fim:g('pz-fim')||null, indice:g('pz-ind')||null});
+  acao(async()=>{ await q(sb.from('contratos').update({situacao:sit, entrada:g('pz-ini')||null}).eq('id',c.id)); }, 'Prazo e reajuste salvos');
+}, true);
+
 if(S.me) carregar().then(render).catch(()=>{});
 })();
