@@ -1,8 +1,8 @@
 /* Citihaus · Meu Contrato — Dashboard (VGV/VGL, metas, tempos), Contratos reorganizado, ordem das abas e acessos por pessoa */
 (function(){
 if(TOKEN) return;
-const ABAS = [['dashboard','📊 Dashboard'],['contratos','Contratos'],['captacoes','Captações'],['chamados','Chamados'],['imoveis','Imóveis'],['pessoas','Pessoas'],['whatsapp','WhatsApp'],['acessos','⚙ Configuração'],['mensagens','Mensagens']];
-const ABA_NOME = {dashboard:'Dashboard',contratos:'Contratos',captacoes:'Captações',chamados:'Chamados',imoveis:'Imóveis',pessoas:'Pessoas',whatsapp:'WhatsApp',mensagens:'Mensagens'};
+const ABAS = [['dashboard','📊 Dashboard'],['contratos','Contratos'],['captacoes','Captações'],['imoveis','Imóveis'],['pessoas','Pessoas'],['whatsapp','WhatsApp'],['acessos','⚙ Configuração'],['mensagens','Mensagens']];
+const ABA_NOME = {dashboard:'Dashboard',contratos:'Contratos',captacoes:'Captações',imoveis:'Imóveis',pessoas:'Pessoas',whatsapp:'WhatsApp',mensagens:'Mensagens'};
 const MESES = ['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
 const MESES_L = ['janeiro','fevereiro','março','abril','maio','junho','julho','agosto','setembro','outubro','novembro','dezembro'];
 const hoje = new Date();
@@ -26,7 +26,7 @@ const corretores = () => [...new Set([...(D.eqAll||[]).map(e=>e.nome), ...(D.cap
 let primeira = true;
 const carregarOrig = carregar;
 carregar = async function(){
-  if(primeira){ primeira=false; const h=(location.hash||'').slice(1); S.tab = h==='ativos' ? 'contratos' : (ABAS.some(a=>a[0]===h) ? h : 'dashboard'); }
+  if(primeira){ primeira=false; const h=(location.hash||'').slice(1); S.tab = (h==='ativos'||h==='chamados') ? 'contratos' : (ABAS.some(a=>a[0]===h) ? h : 'dashboard'); }
   await carregarOrig();
   try{
     const [vs, ms, el, eq] = await Promise.all([
@@ -289,12 +289,15 @@ function boxLinkProp(c){
 const renderOrig = render;
 render = function(){
   if(S.me && !pode(S.tab)) S.tab = (ABAS.map(a=>a[0]).find(pode)) || 'contratos';
-  if(S.tab==='ativos') S.tab='contratos';
+  if(S.tab==='ativos' || S.tab==='chamados') S.tab='contratos';
   renderOrig();
   if(!S.me) return;
   const nav=document.querySelector('nav.sub'); if(!nav) return;
   if(!nav.querySelector('[data-tab="dashboard"]')) nav.insertAdjacentHTML('afterbegin', '<button data-tab="dashboard">📊 Dashboard</button>');
   const at=nav.querySelector('[data-tab="ativos"]'); if(at) at.remove();
+  const chb=nav.querySelector('[data-tab="chamados"]'); if(chb) chb.remove();
+  const ctb=nav.querySelector('[data-tab="contratos"]'), nab=D.chamados.filter(h=>h.status!=='resolvido').length;
+  if(ctb && nab && !ctb.querySelector('.tabn')) ctb.insertAdjacentHTML('beforeend', `<span class="tabn" title="${nab} chamado(s) em aberto">${nab}</span>`);
   const ac=nav.querySelector('[data-tab="acessos"]'); if(ac) ac.textContent='⚙ Configuração';
   ABAS.forEach(([k])=>{ const b=nav.querySelector(`[data-tab="${k}"]`); if(!b) return; if(!pode(k)) b.remove(); else nav.appendChild(b); });
   nav.querySelectorAll('button').forEach(b=>b.setAttribute('aria-pressed', b.dataset.tab===S.tab));
