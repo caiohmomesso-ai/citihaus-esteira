@@ -242,6 +242,7 @@ function dModalHtml(){
   if(m.tipo==='desoc') return desocModal();
   if(m.tipo==='comwa') return comWaModal();
   if(m.tipo==='drive') return driveModalHtml();
+  if(m.tipo==='mover') return moverModal();
   if(m.tipo==='ativo'){ const livres=D.imoveis.slice().sort((a,b)=>a.titulo.localeCompare(b.titulo)), im=m.imv&&D.imoveis.find(i=>i.id===m.imv), dono=im?P(im.proprietario_id):{};
     const pf=(pre,rot,o={})=>`<label class="f"><span>Nome ${o.req?'<span style="color:var(--bad)">*</span>':''}</span><input id="${pre}-nome" value="${esc(o.v&&o.v.nome||'')}" ${o.req?'required':''}></label>
       <label class="f">Celular (WhatsApp)<input id="${pre}-tel" inputmode="tel" value="${esc(o.v&&o.v.telefone||'')}" placeholder="(17) 9…"></label>
@@ -291,7 +292,7 @@ kanban = function(){
   </div>
   <div class="board-scroll"><div class="board">
   ${ETAPAS.slice(0,6).map((e,i)=>{const cs=lista.filter(c=>c.etapa===i);
-    return `<section class="col"><div class="col-h"><div><h3>${e}</h3><small>${ETAPA_DESC[i]}</small></div><span class="count">${cs.length}</span></div>
+    return `<section class="col" data-drop="ct" data-et="${i}"><div class="col-h"><div><h3>${e}</h3><small>${ETAPA_DESC[i]}</small></div><span class="count">${cs.length}</span></div>
     ${cs.length?cs.map(card).join(''):'<div class="empty">Nenhum contrato aqui</div>'}</section>`}).join('')}
   </div></div>
   <div id="sec-ativos" style="border-top:2px solid var(--line);margin-top:8px;scroll-margin-top:80px">${ativosSemDesoc()}</div>
@@ -425,6 +426,7 @@ render = function(){
   if(S.tab==='captacoes' && isAdm()){ const ib=document.querySelector('#app [data-capinteg]'); if(ib && !document.querySelector('#app [data-capdrive]')) ib.insertAdjacentHTML('beforebegin','<button class="btn" data-capdrive="1">📁 Google Drive</button>'); }
   if(dr && c && !document.getElementById('cap-drive')){ const s2=dr.querySelector('#cap-s2'); const h3=s2&&s2.firstElementChild;
     if(h3) h3.insertAdjacentHTML('afterend', `<div id="cap-drive" style="display:flex;gap:8px;align-items:center;background:var(--info-soft);border-radius:10px;padding:8px 12px;margin-bottom:10px;font-size:12.5px">📁 <span>Pasta no Drive: <b>Citihaus · Captações / ${esc(capNome(c))}</b>. As fotos que entrarem lá aparecem aqui sozinhas.</span></div>`); }
+  prepararArrastar();
   if(S.dModal) layer.insertAdjacentHTML('beforeend', dModalHtml());
 };
 
@@ -518,7 +520,7 @@ function desocHtml(){
   return `<div class="head"><div><h1>🚚 Desocupação</h1><p>Do aviso de saída até a entrega das chaves. Para começar, clique em “🚚 Desocupar” no contrato ativo.</p></div></div>
   <div class="board-scroll"><div class="board">
   ${DE.slice(0,4).map((e,i)=>{ const cs=L.filter(c=>dsc(c).etapa===i);
-    return `<section class="col"><div class="col-h"><div><h3>${DE_IC[i]} ${e}</h3><small>${DE_DESC[i]}</small></div><span class="count">${cs.length}</span></div>
+    return `<section class="col" data-drop="ds" data-et="${i}"><div class="col-h"><div><h3>${DE_IC[i]} ${e}</h3><small>${DE_DESC[i]}</small></div><span class="count">${cs.length}</span></div>
     ${cs.length?cs.map(desocCard).join(''):'<div class="empty">Nenhum contrato aqui</div>'}</section>`; }).join('')}
   </div></div>
   ${enc.length?`<details style="margin-bottom:24px"><summary style="cursor:pointer;font-weight:600">✅ Contratos encerrados (${enc.length})</summary>
@@ -670,6 +672,81 @@ const modalImvOrig = modalHtml;
 modalHtml = function(){ const h=modalImvOrig(), m=S.modal;
   if(m && h.includes('id="i-st"')){ const i=D.imoveis.find(x=>x.id===m.id)||{}; return h.replace(/(<select id="i-st">[\s\S]*?)<\/select>/, (all,a)=>a+`<option ${i.status==='Vendido'?'selected':''}>Vendido</option></select>`); }
   return h; };
+
+/* ---------- arrastar e soltar entre etapas ---------- */
+const CE_N = ['Atendimento','Informações','Imagens','Descrições','Publicação','No ar'];
+function prepararArrastar(){
+  const app=document.getElementById('app'); if(!app) return;
+  if(S.tab==='captacoes'){ const bd=app.querySelector('.board'); if(bd) [...bd.querySelectorAll(':scope > section.col')].forEach((col,i)=>{ if(i<=4){ col.dataset.drop='cap'; col.dataset.et=i; } }); }
+  app.querySelectorAll('section.col[data-drop]').forEach(col=>{
+    const k=col.dataset.drop;
+    col.querySelectorAll('.card').forEach(cd=>{ const id = k==='cap' ? cd.dataset.capopen : cd.dataset.open; if(!id) return;
+      cd.draggable=true; cd.dataset.drag=k+'|'+id; cd.style.cursor='grab'; cd.title='Arraste para outra etapa'; });
+  });
+}
+let arr=null;
+document.addEventListener('dragstart', e=>{ const cd=e.target.closest && e.target.closest('[data-drag]'); if(!cd) return; arr=cd.dataset.drag; e.dataTransfer.effectAllowed='move'; try{ e.dataTransfer.setData('text/plain', arr); }catch(_){} cd.style.opacity='.5'; });
+document.addEventListener('dragend', e=>{ const cd=e.target.closest && e.target.closest('[data-drag]'); if(cd) cd.style.opacity=''; document.querySelectorAll('section.col.drop-on').forEach(c=>{ c.classList.remove('drop-on'); c.style.outline=''; }); arr=null; });
+document.addEventListener('dragover', e=>{ const col=e.target.closest && e.target.closest('section.col[data-drop]'); if(!col||!arr||arr.split('|')[0]!==col.dataset.drop) return; e.preventDefault(); e.dataTransfer.dropEffect='move';
+  document.querySelectorAll('section.col.drop-on').forEach(c=>{ if(c!==col){ c.classList.remove('drop-on'); c.style.outline=''; } }); col.classList.add('drop-on'); col.style.outline='2px dashed var(--accent)'; col.style.outlineOffset='-4px'; });
+document.addEventListener('drop', e=>{ const col=e.target.closest && e.target.closest('section.col[data-drop]'); if(!col||!arr) return; e.preventDefault();
+  const [k,id]=arr.split('|'); if(k!==col.dataset.drop) return; col.classList.remove('drop-on'); col.style.outline=''; moverPara(k, id, +col.dataset.et, false); });
+function itemDe(k,id){ return k==='cap' ? (D.captacoes||[]).find(x=>x.id===id) : D.contratos.find(x=>x.id===id); }
+function etapaDe(k,o){ return k==='ds' ? dsc(o).etapa : o.etapa; }
+function nomeEt(k,i){ return k==='ct'?ETAPAS[i]:k==='cap'?CE_N[i]:DE[i]; }
+function pendDe(k,o){ return k==='ct'?gate(o):k==='cap'?(window.capGateX?window.capGateX(o):[]):desocFalta(o); }
+function moverPara(k, id, para, forca){
+  const o=itemDe(k,id); if(!o) return; const de=etapaDe(k,o); if(para===de) return;
+  if(para>de){
+    const pe=pendDe(k,o);
+    if((para-de>1 || pe.length) && !forca){
+      if(!isAdm()) return toast(para-de>1 ? 'Avance uma etapa por vez' : 'Antes de avançar, falta: '+pe.slice(0,3).join(', ')+(pe.length>3?'…':''));
+      S.dModal={tipo:'mover', k, id, para, pe}; return render();
+    }
+  }
+  const txt=(para>de?'Avançou':'Voltou')+' para '+nomeEt(k,para)+' (arrastando, '+S.me.nome+')'+(forca&&para>de&&pendDe(k,o).length?' com pendências: '+pendDe(k,o).join('; '):'');
+  acao(async()=>{
+    if(k==='ct'){ await q(sb.from('contratos').update({etapa:para}).eq('id',id)); await log(id, txt); }
+    else if(k==='cap'){ await q(sb.from('captacoes').update({etapa:para, updated_at:new Date().toISOString()}).eq('id',id)); await q(sb.from('captacao_hist').insert({captacao_id:id, texto:txt})); }
+    else { await salvarDesoc(o, {etapa:para}, 'Desocupação: '+txt); }
+    S.dModal=null;
+  }, (k==='cap'?'Captação':k==='ds'?'Desocupação':'Contrato '+o.numero)+' em '+nomeEt(k,para));
+}
+function moverModal(){ const m=S.dModal, o=itemDe(m.k,m.id); if(!o) return '';
+  return `<div class="ov center"><div class="modal" style="width:min(480px,calc(100% - 32px))"><div class="m-h"><span class="mono" style="color:var(--accent-ink)">Administrador</span><h2 style="font-size:19px;margin-top:4px">Mover para “${esc(nomeEt(m.k,m.para))}”?</h2></div>
+    <div class="m-b" style="display:block">${m.pe.length?`<div class="gate no"><div class="gt"><b>Ainda falta em “${esc(nomeEt(m.k,etapaDe(m.k,o)))}”:</b><ul>${m.pe.map(x=>`<li>${esc(x)}</li>`).join('')}</ul></div></div>`:''}
+    ${m.para-etapaDe(m.k,o)>1?`<p class="muted" style="font-size:13px">Você está pulando ${m.para-etapaDe(m.k,o)-1} etapa(s). O avanço fica registrado no histórico.</p>`:''}</div>
+    <div class="m-f"><button type="button" class="btn" data-dmclose="1">Cancelar</button><button type="button" class="btn" style="border-color:var(--bad);color:var(--bad)" data-moverok="1">Mover mesmo assim</button></div></div></div>`; }
+document.addEventListener('click', e=>{ const b=e.target.closest('button[data-moverok]'); if(!b) return; e.stopImmediatePropagation(); const m=S.dModal; moverPara(m.k, m.id, m.para, true); }, true);
+
+/* ---------- salvar automático enquanto digita ---------- */
+const filaAuto = {};
+function marcaSalvo(f, txt){ const b=f.querySelector('button[type=submit]'); if(!b) return; if(!b.dataset.orig) b.dataset.orig=b.textContent; b.textContent=txt; b.disabled = txt!=='Salvar';
+  clearTimeout(b._t); if(txt==='✓ Salvo') b._t=setTimeout(()=>{ b.textContent='✓ Salvo automaticamente'; }, 1500); }
+async function autoSalvar(f){
+  const g=id=>{ const x=f.querySelector('#'+id); return x?x.value.trim():''; }, c=D.contratos.find(k=>k.id===f.dataset.c); if(!c) return;
+  marcaSalvo(f,'Salvando…');
+  try{
+    if(f.id==='f-sit'){ const sit=Object.assign({}, c.situacao||{}, {seguro_venc:g('s-venc')||null, boleto:g('s-bol')||null, boleto_obs:g('s-obs')}); await q(sb.from('contratos').update({situacao:sit}).eq('id',c.id)); c.situacao=sit; }
+    if(f.id==='f-prazo'){ const sit=Object.assign({}, c.situacao||{}, {fim:g('pz-fim')||null, indice:g('pz-ind')||null}); await q(sb.from('contratos').update({situacao:sit, entrada:g('pz-ini')||null}).eq('id',c.id)); c.situacao=sit; c.entrada=g('pz-ini')||null; }
+    if(f.id==='f-desoc'){ await salvarDesoc(c, {aviso:g('ds-aviso')||null, saida_prevista:g('ds-saida')||null, vistoria:g('ds-vist')||null, multa:g('ds-multa'), acerto:g('ds-acerto'), obs:g('ds-obs')}); }
+    marcaSalvo(f,'✓ Salvo');
+  }catch(err){ marcaSalvo(f,'Salvar'); falha(err); }
+}
+const AUTO_FORMS = ['f-sit','f-prazo','f-desoc'];
+function agendarAuto(el){
+  const f=el.form; if(f && AUTO_FORMS.includes(f.id)){ clearTimeout(filaAuto[f.id]); marcaSalvo(f,'Salvar'); filaAuto[f.id]=setTimeout(()=>autoSalvar(f), el.type==='date'||el.tagName==='SELECT'?50:900); return; }
+  /* captação: campos de texto salvam enquanto digita (o salvamento original roda no "change") */
+  if(el.closest && el.closest('#cap-drawer') && (el.dataset.fic!==undefined||el.dataset.ate!==undefined||el.dataset.prop!==undefined||el.dataset.col!==undefined) && el.tagName!=='SELECT' && el.type!=='checkbox'){
+    const key='cap:'+(el.dataset.fic||el.dataset.ate||el.dataset.prop||el.dataset.col);
+    clearTimeout(filaAuto[key]); filaAuto[key]=setTimeout(()=>{ if(document.body.contains(el)) el.dispatchEvent(new Event('change',{bubbles:true})); }, 900); return; }
+  if(el.id==='ct-tit' || el.id==='ct-desc'){ const c=(D.captacoes||[]).find(k=>k.id===S.capOpen); if(!c) return; clearTimeout(filaAuto.ct);
+    filaAuto.ct=setTimeout(async()=>{ const t=document.getElementById('ct-tit'), ds=document.getElementById('ct-desc'); const patch={}; if(t) patch.titulo=t.value.trim(); if(ds) patch.descricao=ds.value.trim();
+      try{ await q(sb.from('captacoes').update(Object.assign(patch,{updated_at:new Date().toISOString()})).eq('id',c.id)); Object.assign(c,patch); toast('Rascunho salvo ✓'); }catch(err){ falha(err); } }, 1200); }
+}
+document.addEventListener('input', e=>agendarAuto(e.target), true);
+document.addEventListener('change', e=>{ const f=e.target.form; if(f && AUTO_FORMS.includes(f.id) && (e.target.type==='date'||e.target.tagName==='SELECT')) agendarAuto(e.target); }, true);
+document.addEventListener('submit', e=>{ const f=e.target; if(!AUTO_FORMS.includes(f.id)) return; e.preventDefault(); e.stopImmediatePropagation(); clearTimeout(filaAuto[f.id]); autoSalvar(f); }, true);
 
 if(S.me) carregar().then(render).catch(()=>{});
 })();

@@ -37,6 +37,7 @@ const ate = c => c.atendimento||{};
 const capCod = c => 'CAP-' + String(c.numero).padStart(3,'0');
 const capTitulo = c => { const f=fic(c); return [f.categoria, f.condominio||f.bairro].filter(Boolean).join(' · ') || (P(c.proprietario_id).nome ? 'Imóvel de '+P(c.proprietario_id).nome.split(' ')[0] : 'Nova captação'); };
 const capLog = (id, texto) => q(sb.from('captacao_hist').insert({captacao_id:id, texto}));
+window.capLogX = capLog; window.capGateX = (c, et) => capGate(c, et);
 
 function capGate(c, et){
   et = et===undefined ? c.etapa : et; const f=fic(c), p=P(c.proprietario_id), out=[];
