@@ -46,7 +46,7 @@ function carteira(){
   const venda=C.filter(c=>c.finalidade!=='Locação' && !vend.has(c.id) && num(c.ficha&&c.ficha.valor_venda));
   const loc=C.filter(c=>c.finalidade!=='Venda' && num(c.ficha&&c.ficha.valor_locacao));
   const imv=D.imoveis.filter(i=>i.status==='Disponível' && Number(i.aluguel));
-  const ativos=D.contratos.filter(c=>c.etapa===6);
+  const ativos=D.contratos.filter(c=>c.etapa===6 && !encerrado(c));
   return {
     vgv: venda.reduce((s,c)=>s+num(c.ficha.valor_venda),0), nVgv: venda.length,
     vgvPub: venda.filter(c=>c.etapa===5).reduce((s,c)=>s+num(c.ficha.valor_venda),0),
@@ -238,6 +238,7 @@ function dModalHtml(){
     <div class="m-f"><button type="button" class="btn" data-dmclose="1">Cancelar</button><button class="btn pri" type="submit">Salvar metas</button></div></form></div>`;
   }
 
+  if(m.tipo==='desoc') return desocModal();
   if(m.tipo==='ativo'){ const livres=D.imoveis.slice().sort((a,b)=>a.titulo.localeCompare(b.titulo)), im=m.imv&&D.imoveis.find(i=>i.id===m.imv), dono=im?P(im.proprietario_id):{};
     const pf=(pre,rot,o={})=>`<label class="f"><span>Nome ${o.req?'<span style="color:var(--bad)">*</span>':''}</span><input id="${pre}-nome" value="${esc(o.v&&o.v.nome||'')}" ${o.req?'required':''}></label>
       <label class="f">Celular (WhatsApp)<input id="${pre}-tel" inputmode="tel" value="${esc(o.v&&o.v.telefone||'')}" placeholder="(17) 9…"></label>
@@ -276,9 +277,9 @@ kanban = function(){
   const lista=D.contratos.filter(c=>c.etapa<6);
   const conferir=lista.reduce((a,c)=>a+aConferir(c),0);
   const cliente=lista.filter(c=>c.etapa===0).reduce((a,c)=>a+partesDe(c).reduce((b,x)=>b+pend(x.pessoa_id,x.papel).length,0),0);
-  const prontos=lista.filter(c=>!gate(c).length).length, nAt=D.contratos.filter(c=>c.etapa===6).length, nCh=D.chamados.filter(h=>h.status!=='resolvido').length;
+  const prontos=lista.filter(c=>!gate(c).length).length, nAt=D.contratos.filter(c=>c.etapa===6&&!emDesoc(c)&&!encerrado(c)).length, nCh=D.chamados.filter(h=>h.status!=='resolvido').length;
   return `<div class="head"><div><h1>Contratos de locação</h1><p>Em cima, os contratos que vão iniciar. Embaixo, os ativos e os chamados de cada contrato.</p></div>
-    <div class="row" style="gap:8px"><button class="btn sm" data-dscroll="sec-ativos">🏢 Ativos (${nAt})</button><button class="btn sm" data-dscroll="sec-chamados">🎫 Chamados (${nCh})</button><button class="btn" data-dativo="1">+ Contrato já ativo</button><button class="btn pri" data-tab="imoveis">+ Iniciar contrato</button></div></div>
+    <div class="row" style="gap:8px"><button class="btn sm" data-dscroll="sec-ativos">🏢 Ativos (${nAt})</button><button class="btn sm" data-dscroll="sec-desoc">🚚 Desocupação (${D.contratos.filter(emDesoc).length})</button><button class="btn sm" data-dscroll="sec-chamados">🎫 Chamados (${nCh})</button><button class="btn" data-dativo="1">+ Contrato já ativo</button><button class="btn pri" data-tab="imoveis">+ Iniciar contrato</button></div></div>
   <div class="stats">
     <div class="stat"><b>${lista.length}</b><span>contratos para iniciar</span></div>
     <div class="stat hl"><b>${conferir}</b><span>documentos aguardando conferência</span></div>
@@ -290,7 +291,8 @@ kanban = function(){
     return `<section class="col"><div class="col-h"><div><h3>${e}</h3><small>${ETAPA_DESC[i]}</small></div><span class="count">${cs.length}</span></div>
     ${cs.length?cs.map(card).join(''):'<div class="empty">Nenhum contrato aqui</div>'}</section>`}).join('')}
   </div></div>
-  <div id="sec-ativos" style="border-top:2px solid var(--line);margin-top:8px;scroll-margin-top:80px">${(window.ativosHtml?window.ativosHtml():'').replace('<p>Locações em vigor. Os clientes destes contratos usam o portal só para chamados.</p></div>','<p>Locações em vigor. Os clientes destes contratos usam o portal só para chamados.</p></div><button class="btn pri" data-dativo="1">+ Incluir contrato já ativo</button>')}</div>
+  <div id="sec-ativos" style="border-top:2px solid var(--line);margin-top:8px;scroll-margin-top:80px">${ativosSemDesoc()}</div>
+  <div id="sec-desoc" style="border-top:2px solid var(--line);scroll-margin-top:80px">${desocHtml()}</div>
   <div id="sec-chamados" style="border-top:2px solid var(--line);scroll-margin-top:80px">${chamadosEquipe().replace('<h1>Chamados</h1><p>Abertos pelo cliente no portal. Cada um tem protocolo e fica ligado ao contrato.</p>','<h1>Chamados dos contratos</h1><p>Abertos pelo portal ou pelo WhatsApp. Os que pedem ação aparecem no Dashboard.</p>')}</div>`;
 };
 
@@ -403,6 +405,123 @@ document.addEventListener('submit', e=>{
     return acao(async()=>{ await q(sb.from('metas').upsert(rows,{onConflict:'ano,mes,tipo,corretor'})); S.dModal=null; }, 'Metas salvas 🎯'); }
 }, true);
 document.addEventListener('keydown', e=>{ if(e.key==='Escape' && S.dModal){ S.dModal=null; render(); } });
+
+/* ---------- Desocupação (saída do inquilino) ---------- */
+const DE = ['Aviso de saída','Vistoria de saída','Reparos e acerto','Entrega das chaves','Encerrado'];
+const DE_DESC = ['Aviso recebido e multa calculada','Vistoria comparada com a de entrada','Reparos, contas e acerto final','Chaves e termo de entrega','Imóvel liberado'];
+const DE_IC = ['📣','🔍','🧾','🔑','✅'];
+const DE_TAR = {
+  0:['Aviso de saída recebido por escrito','Multa rescisória calculada (se houver)','Proprietário avisado da saída'],
+  1:['Vistoria de saída agendada','Vistoria realizada e comparada com a de entrada'],
+  2:['Orçamento de reparos feito ou dispensado','Contas de consumo quitadas e desligadas (energia, água, gás)','Aluguel proporcional, condomínio e IPTU acertados','Garantia liberada (caução, seguro fiança ou fiador)'],
+  3:['Chaves devolvidas','Termo de entrega de chaves assinado']
+};
+const MOTIVOS = ['Fim do contrato','Rescisão pelo inquilino','Rescisão pelo proprietário','Inadimplência / despejo','Venda do imóvel','Outro'];
+const dsc = c => (c.situacao||{}).desocupacao || null;
+function emDesoc(c){ const d=dsc(c); return !!d && d.etapa<4; }
+function encerrado(c){ const d=dsc(c); return !!d && d.etapa>=4; }
+const desocFalta = (c, et) => { const d=dsc(c)||{}, t=d.tarefas||{}; et = et===undefined ? d.etapa : et; return (DE_TAR[et]||[]).filter((x,i)=>!t[et+'-'+i]); };
+function ativosSemDesoc(){
+  const all=D.contratos; let h='';
+  try{ D.contratos=all.filter(c=>!emDesoc(c) && !encerrado(c)); h=window.ativosHtml?window.ativosHtml():''; } finally { D.contratos=all; }
+  return h.replace('<p>Locações em vigor. Os clientes destes contratos usam o portal só para chamados.</p></div>','<p>Locações em vigor. Os clientes destes contratos usam o portal só para chamados.</p></div><button class="btn pri" data-dativo="1">+ Incluir contrato já ativo</button>')
+    .replace(/<button class="btn sm" data-open="([^"]+)">Abrir<\/button>/g, (m,id)=>`<button class="btn sm ghost" data-desocini="${id}" title="Iniciar desocupação">🚚 Desocupar</button>`+m);
+}
+function desocCard(c){
+  const d=dsc(c), im=imvDe(c), inq=partesDe(c).find(x=>x.papel==='inquilino'), f=desocFalta(c);
+  const prev=d.saida_prevista, dias=prev?Math.ceil((new Date(prev+'T12:00:00')-Date.now())/864e5):null;
+  return `<button class="card" data-open="${c.id}">
+    <span class="code">${esc(pastaC(c))}</span><h4>${esc(im.titulo)}</h4>
+    <div class="meta">${esc(inq?nomeP(P(inq.pessoa_id),'inquilino'):'—')} · ${esc(d.motivo||'')}</div>
+    <div class="row between"><span class="meta">Saída prevista</span><span class="meta num">${prev?dataBR(prev):'—'}</span></div>
+    <div class="row">${dias!=null?`<span class="pill ${dias<0?'p-bad':dias<=7?'p-warn':'p-mute'}">${dias<0?Math.abs(dias)+' dias atrasada':dias===0?'Sai hoje':'Faltam '+dias+' dias'}</span>`:''}${f.length?`<span class="pill p-mute">${f.length} pendente${f.length>1?'s':''}</span>`:'<span class="pill p-ok">Pronto para avançar</span>'}</div>
+  </button>`;
+}
+function desocHtml(){
+  const L=D.contratos.filter(emDesoc), enc=D.contratos.filter(encerrado).sort((a,b)=>String(dsc(b).encerrado_em||'').localeCompare(String(dsc(a).encerrado_em||'')));
+  return `<div class="head"><div><h1>🚚 Desocupação</h1><p>Do aviso de saída até a entrega das chaves. Para começar, clique em “🚚 Desocupar” no contrato ativo.</p></div></div>
+  <div class="board-scroll"><div class="board">
+  ${DE.slice(0,4).map((e,i)=>{ const cs=L.filter(c=>dsc(c).etapa===i);
+    return `<section class="col"><div class="col-h"><div><h3>${DE_IC[i]} ${e}</h3><small>${DE_DESC[i]}</small></div><span class="count">${cs.length}</span></div>
+    ${cs.length?cs.map(desocCard).join(''):'<div class="empty">Nenhum contrato aqui</div>'}</section>`; }).join('')}
+  </div></div>
+  ${enc.length?`<details style="margin-bottom:24px"><summary style="cursor:pointer;font-weight:600">✅ Contratos encerrados (${enc.length})</summary>
+    <div class="tbl-wrap" style="margin-top:10px"><table><thead><tr><th>Nº</th><th>Imóvel</th><th>Motivo</th><th>Saída</th><th>Acerto</th><th></th></tr></thead><tbody>
+    ${enc.map(c=>{ const d=dsc(c); return `<tr><td class="mono">${c.numero}</td><td><b>${esc(imvDe(c).titulo)}</b></td><td>${esc(d.motivo||'')}</td><td class="num">${dataBR(d.encerrado_em||d.saida_prevista)}</td><td class="num">${d.acerto?brl(num(d.acerto)):'—'}</td><td><button class="btn sm" data-open="${c.id}">Abrir</button></td></tr>`; }).join('')}
+    </tbody></table></div></details>`:''}`;
+}
+function desocSecao(c){
+  const d=dsc(c); if(!d) return `<div class="sec"><div class="row between"><h3 style="margin:0">🚚 Desocupação</h3><button class="btn sm" data-desocini="${c.id}">Iniciar desocupação</button></div></div>`;
+  const t=d.tarefas||{}, f=desocFalta(c), adm=isAdm();
+  const passos=DE.map((e,i)=>`<div style="flex:1;height:6px;border-radius:99px;background:${d.etapa>i?'var(--ok)':d.etapa===i?'var(--accent)':'var(--line)'}" title="${e}"></div>`).join('');
+  const gate = d.etapa>=4 ? `<div class="gate yes"><div class="gt"><b>Contrato encerrado em ${dataBR(d.encerrado_em)}.</b><br>O imóvel voltou para “Disponível”.</div></div>`
+    : `<div class="gate ${f.length?'no':'yes'}"><div class="gt">${f.length?`<b>Para sair de “${DE[d.etapa]}”, falta:</b><ul>${f.map(x=>`<li>${esc(x)}</li>`).join('')}</ul>`:`<b>Tudo certo em “${DE[d.etapa]}”.</b>`}</div>
+      ${f.length?(adm?`<button class="btn" style="border-color:var(--bad);color:var(--bad)" data-desocadv="${c.id}|1">${S.desocForce===c.id?'Confirmar: avançar com pendências':'Avançar mesmo assim'}</button>`:''):`<button class="btn pri" data-desocadv="${c.id}|0">${d.etapa===3?'Encerrar contrato ✅':'Avançar para '+DE[d.etapa+1]+' →'}</button>`}</div>`;
+  return `<div class="sec box" id="desoc-box" style="border-color:var(--amber)"><div class="row between" style="margin-bottom:8px"><h3 style="margin:0">🚚 Desocupação · ${DE_IC[Math.min(d.etapa,4)]} ${DE[Math.min(d.etapa,4)]}</h3><span class="pill p-acc">${esc(d.motivo||'')}</span></div>
+    <div style="display:flex;gap:4px;margin-bottom:12px">${passos}</div>
+    ${gate}
+    <form id="f-desoc" data-c="${c.id}" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;align-items:end;margin-top:12px">
+      <label class="f">Aviso recebido em<input id="ds-aviso" type="date" value="${esc(d.aviso||'')}"></label>
+      <label class="f">Saída prevista<input id="ds-saida" type="date" value="${esc(d.saida_prevista||'')}"></label>
+      <label class="f">Vistoria de saída<input id="ds-vist" type="date" value="${esc(d.vistoria||'')}"></label>
+      <label class="f">Multa rescisória (R$)<input id="ds-multa" inputmode="decimal" value="${esc(d.multa||'')}"></label>
+      <label class="f">Valor do acerto final (R$)<input id="ds-acerto" inputmode="decimal" value="${esc(d.acerto||'')}" placeholder="+ a receber / − a devolver"></label>
+      <label class="f" style="grid-column:1/-1">Observações<input id="ds-obs" value="${esc(d.obs||'')}" placeholder="Ex.: pintura por conta do inquilino, chave do portão faltando"></label>
+      <button class="btn" type="submit">Salvar dados</button></form>
+    ${[0,1,2,3].map(et=>`<div style="margin-top:12px"><div style="font-size:12.5px;font-weight:700;color:${et===d.etapa?'var(--accent-ink)':'var(--muted)'};margin-bottom:6px">${DE_IC[et]} ${DE[et]}</div><div style="display:grid;gap:6px">
+      ${DE_TAR[et].map((x,i)=>`<label class="task"><input type="checkbox" data-desoctar="${c.id}|${et}-${i}" ${t[et+'-'+i]?'checked':''}> ${esc(x)}</label>`).join('')}</div></div>`).join('')}
+    ${d.etapa<4&&adm?`<div class="row" style="justify-content:flex-end;margin-top:10px"><button class="btn sm ghost" style="color:var(--bad)" data-desoccancel="${c.id}">${S.desocCancel===c.id?'Confirmar: cancelar desocupação':'Cancelar desocupação'}</button></div>`:''}
+  </div>`;
+}
+const drawerDesocOrig = drawer;
+drawer = function(c){
+  const h=drawerDesocOrig(c);
+  if(c.etapa!==6) return h;
+  return h.replace('<div class="d-body">', '<div class="d-body">'+desocSecao(c));
+};
+async function salvarDesoc(c, patch, logTxt){
+  const sit=Object.assign({}, c.situacao||{}); sit.desocupacao=Object.assign({}, sit.desocupacao||{}, patch);
+  await q(sb.from('contratos').update({situacao:sit}).eq('id',c.id)); c.situacao=sit;
+  if(logTxt) await log(c.id, logTxt);
+}
+function desocModal(){ const c=D.contratos.find(k=>k.id===S.dModal.c); if(!c) return '';
+  return `<div class="ov center"><form class="modal" id="f-desocini" data-c="${c.id}">
+    <div class="m-h"><span class="mono" style="color:var(--accent-ink)">${esc(pastaC(c))}</span><h2 style="font-size:19px;margin-top:4px">🚚 Iniciar desocupação</h2><p class="muted" style="margin:4px 0 0;font-size:12.5px">${esc(imvDe(c).titulo)}</p></div>
+    <div class="m-b">
+      <label class="f full">Motivo<select id="di-mot">${MOTIVOS.map(m=>`<option>${m}</option>`).join('')}</select></label>
+      <label class="f">Aviso recebido em<input id="di-aviso" type="date" value="${new Date().toISOString().slice(0,10)}"></label>
+      <label class="f">Saída prevista<input id="di-saida" type="date"></label>
+      <label class="f full">Observação<input id="di-obs" placeholder="Ex.: avisou por WhatsApp, vai sair no fim do mês"></label>
+      <div class="note full">O contrato sai de “Ativos” e vai para o kanban de Desocupação. Ao encerrar, o imóvel volta para “Disponível”.</div>
+    </div>
+    <div class="m-f"><button type="button" class="btn" data-dmclose="1">Cancelar</button><button class="btn pri" type="submit">Iniciar desocupação</button></div></form></div>`;
+}
+document.addEventListener('click', e=>{
+  const b=e.target.closest('button'); if(!b) return; const d=b.dataset;
+  if(d.desocini){ e.stopImmediatePropagation(); S.open=null; S.dModal={tipo:'desoc', c:d.desocini}; return render(); }
+  if(d.desocadv){ e.stopImmediatePropagation(); const [id,fz]=d.desocadv.split('|'), c=D.contratos.find(k=>k.id===id), ds=dsc(c), f=desocFalta(c);
+    if(fz==='1' && S.desocForce!==id){ S.desocForce=id; return render(); } S.desocForce=null;
+    const nova=ds.etapa+1, patch={etapa:nova}; if(nova===4) patch.encerrado_em=new Date().toISOString().slice(0,10);
+    return acao(async()=>{ await salvarDesoc(c, patch, (nova===4?'Contrato encerrado (desocupação concluída)':'Desocupação: avançou para '+DE[nova])+' por '+S.me.nome+(f.length?' com pendências: '+f.join('; '):''));
+      if(nova===4) await q(sb.from('imoveis').update({status:'Disponível'}).eq('id',c.imovel_id)); }, nova===4?'Contrato encerrado ✅ Imóvel disponível de novo':'Desocupação em '+DE[nova]); }
+  if(d.desoccancel){ e.stopImmediatePropagation(); const c=D.contratos.find(k=>k.id===d.desoccancel);
+    if(S.desocCancel!==c.id){ S.desocCancel=c.id; return render(); } S.desocCancel=null;
+    return acao(async()=>{ const sit=Object.assign({}, c.situacao||{}); delete sit.desocupacao; await q(sb.from('contratos').update({situacao:sit}).eq('id',c.id)); await log(c.id,'Desocupação cancelada por '+S.me.nome+' (contrato segue ativo)'); }, 'Desocupação cancelada'); }
+}, true);
+document.addEventListener('change', e=>{
+  const el=e.target; if(!el.dataset || !el.dataset.desoctar) return; e.stopImmediatePropagation();
+  const [id,k]=el.dataset.desoctar.split('|'), c=D.contratos.find(x=>x.id===id), t=Object.assign({}, (dsc(c)||{}).tarefas||{}); t[k]=el.checked;
+  (async()=>{ try{ await salvarDesoc(c, {tarefas:t}); toast('Salvo ✓'); render(); }catch(err){ falha(err); } })();
+}, true);
+document.addEventListener('submit', e=>{
+  const f=e.target, g=id=>{ const x=f.querySelector('#'+id); return x?x.value.trim():''; };
+  if(f.id==='f-desocini'){ e.preventDefault(); e.stopImmediatePropagation(); const c=D.contratos.find(k=>k.id===f.dataset.c);
+    return acao(async()=>{ await salvarDesoc(c, {etapa:0, motivo:g('di-mot'), aviso:g('di-aviso')||null, saida_prevista:g('di-saida')||null, obs:g('di-obs'), tarefas:{}, iniciado_em:new Date().toISOString()},
+      'Desocupação iniciada por '+S.me.nome+' · '+g('di-mot')+(g('di-saida')?' · saída prevista '+dataBR(g('di-saida')):''));
+      S.dModal=null; S.tab='contratos'; S.open=c.id; }, 'Desocupação iniciada 🚚'); }
+  if(f.id==='f-desoc'){ e.preventDefault(); e.stopImmediatePropagation(); const c=D.contratos.find(k=>k.id===f.dataset.c);
+    return acao(async()=>{ await salvarDesoc(c, {aviso:g('ds-aviso')||null, saida_prevista:g('ds-saida')||null, vistoria:g('ds-vist')||null, multa:g('ds-multa'), acerto:g('ds-acerto'), obs:g('ds-obs')}); }, 'Dados da desocupação salvos'); }
+}, true);
 
 if(S.me) carregar().then(render).catch(()=>{});
 })();
