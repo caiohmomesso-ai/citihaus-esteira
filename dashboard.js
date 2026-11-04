@@ -80,7 +80,7 @@ function tempoChamados(){
 function tempoContratos(){
   const porC={}; D.etLog.forEach(l=>(porC[l.contrato_id]=porC[l.contrato_id]||[]).push(l));
   const ass=[], atv=[], dur=[0,1,2,3,4,5].map(()=>[]), parados=[];
-  D.contratos.forEach(c=>{
+  D.contratos.filter(c=>!(c.situacao||{}).importado).forEach(c=>{
     const ini=new Date(c.created_at).getTime(), L=(porC[c.id]||[]), entrou={0:ini};
     L.forEach(l=>{ const t=new Date(l.em).getTime(); if(entrou[l.etapa]==null || l.etapa===0) entrou[l.etapa]= l.etapa===0?Math.min(ini,t):t; });
     const pri = e => { let m=null; Object.keys(entrou).forEach(k=>{ if(+k>=e && (m==null||entrou[k]<m)) m=entrou[k]; }); return m; };
@@ -121,7 +121,7 @@ function graficoAno(){
 function dashHtml(){
   const A=S.dAno, M=S.dMes, cart=carteira(), tc=tempoChamados(), tk=tempoContratos();
   const vMes=D.vendas.filter(v=>noMes(v.data,A,M)), vAno=D.vendas.filter(v=>noMes(v.data,A));
-  const capMes=(D.captacoes||[]).filter(c=>noMes(c.created_at,A,M)), locMes=D.contratos.filter(c=>noMes(c.created_at,A,M));
+  const capMes=(D.captacoes||[]).filter(c=>noMes(c.created_at,A,M)), locMes=D.contratos.filter(c=>!(c.situacao||{}).importado && noMes(c.created_at,A,M));
   const soma=l=>l.reduce((s,v)=>s+Number(v.valor),0);
   const cors=corretores();
   const rank=cors.map(n=>({n, cap:capMes.filter(c=>c.corretor===n).length, meta:meta('captacoes',M,n), vend:soma(vMes.filter(v=>v.corretor===n))})).filter(r=>r.cap||r.meta||r.vend).sort((a,b)=>b.cap-a.cap||b.vend-a.vend);
@@ -237,6 +237,37 @@ function dModalHtml(){
     </div>
     <div class="m-f"><button type="button" class="btn" data-dmclose="1">Cancelar</button><button class="btn pri" type="submit">Salvar metas</button></div></form></div>`;
   }
+
+  if(m.tipo==='ativo'){ const livres=D.imoveis.slice().sort((a,b)=>a.titulo.localeCompare(b.titulo)), im=m.imv&&D.imoveis.find(i=>i.id===m.imv), dono=im?P(im.proprietario_id):{};
+    const pf=(pre,rot,o={})=>`<label class="f"><span>Nome ${o.req?'<span style="color:var(--bad)">*</span>':''}</span><input id="${pre}-nome" value="${esc(o.v&&o.v.nome||'')}" ${o.req?'required':''}></label>
+      <label class="f">Celular (WhatsApp)<input id="${pre}-tel" inputmode="tel" value="${esc(o.v&&o.v.telefone||'')}" placeholder="(17) 9…"></label>
+      <label class="f full">E-mail<input id="${pre}-email" type="email" value="${esc(o.v&&o.v.email||'')}"></label>`;
+    return `<div class="ov center"><form class="modal" id="f-dativo" style="width:min(640px,calc(100% - 32px))">
+    <div class="m-h"><span class="mono" style="color:var(--accent-ink)">Contrato em vigor</span><h2 style="font-size:19px;margin-top:4px">🏢 Incluir contrato já ativo</h2>
+      <p class="muted" style="margin:4px 0 0;font-size:12.5px">Para locações que já estão rodando. O contrato entra direto em “Ativos”, sem passar pela esteira, e os clientes já podem usar o portal para chamados.</p></div>
+    <div class="m-b">
+      <div class="full" style="font-weight:700">🏠 Imóvel</div>
+      <label class="f full">Imóvel<select id="da-imv"><option value="">+ Cadastrar imóvel novo</option>${livres.map(i=>`<option value="${i.id}" ${m.imv===i.id?'selected':''}>${esc(i.titulo)}${i.bairro?' · '+esc(i.bairro):''}${i.status&&i.status!=='Disponível'?' ('+esc(i.status)+')':''}</option>`).join('')}</select></label>
+      ${im?'':`<label class="f full"><span>Nome do imóvel <span style="color:var(--bad)">*</span></span><input id="da-tit" required placeholder="Ex.: Casa Rua das Flores, 120"></label>
+      <label class="f">Endereço<input id="da-end"></label><label class="f">Bairro<input id="da-bai"></label>
+      <label class="f">Tipo<select id="da-tipo">${['Apartamento','Casa','Studio','Sala','Salão','Galpão','Terreno'].map(t=>`<option>${t}</option>`).join('')}</select></label>`}
+      <div class="full" style="font-weight:700;margin-top:6px">👤 Proprietário</div>
+      ${pf('da-pro','Proprietário',{req:!im, v:dono})}
+      <div class="full" style="font-weight:700;margin-top:6px">🔑 Inquilino</div>
+      ${pf('da-inq','Inquilino',{req:true})}
+      <div class="full" style="font-weight:700;margin-top:6px">📄 Contrato</div>
+      <label class="f"><span>Aluguel (R$/mês) <span style="color:var(--bad)">*</span></span><input id="da-alu" inputmode="decimal" required value="${im&&im.aluguel?String(im.aluguel).replace('.',','):''}"></label>
+      <label class="f">Garantia<select id="da-gar">${['Fiador','Caução','Caucionador','Seguro fiança','Título de capitalização','Sem garantia'].map(g=>`<option ${m.gar===g?'selected':''}>${g}</option>`).join('')}</select></label>
+      <label class="f">Início do contrato<input id="da-ent" type="date"></label>
+      <label class="f">Término do contrato<input id="da-fim" type="date"></label>
+      <label class="f">Seguro incêndio vence em<input id="da-seg" type="date"></label>
+      <label class="f">Corretor<select id="da-cor">${corretores().map(n=>`<option ${n===S.me.nome?'selected':''}>${esc(n)}</option>`).join('')}</select></label>
+      <label class="f">Nº do contrato (opcional)<input id="da-num" inputmode="numeric" placeholder="Automático"></label>
+      ${(m.gar||'Fiador')==='Fiador'||m.gar==='Caucionador'?`<div class="full" style="font-weight:700;margin-top:6px">🤝 ${m.gar==='Caucionador'?'Caucionador':'Fiador'} (opcional)</div>${pf('da-fia','Fiador')}`:''}
+      <div class="note full">Se o celular já estiver no cadastro, o sistema usa a mesma pessoa. Depois de salvar, você pode anexar o contrato e os documentos dentro do contrato e mandar o link do portal para os clientes.</div>
+    </div>
+    <div class="m-f"><button type="button" class="btn" data-dmclose="1">Cancelar</button><button class="btn pri" type="submit">Incluir contrato ativo</button></div></form></div>`;
+  }
   return '';
 }
 
@@ -247,7 +278,7 @@ kanban = function(){
   const cliente=lista.filter(c=>c.etapa===0).reduce((a,c)=>a+partesDe(c).reduce((b,x)=>b+pend(x.pessoa_id,x.papel).length,0),0);
   const prontos=lista.filter(c=>!gate(c).length).length, nAt=D.contratos.filter(c=>c.etapa===6).length, nCh=D.chamados.filter(h=>h.status!=='resolvido').length;
   return `<div class="head"><div><h1>Contratos de locação</h1><p>Em cima, os contratos que vão iniciar. Embaixo, os ativos e os chamados de cada contrato.</p></div>
-    <div class="row" style="gap:8px"><button class="btn sm" data-dscroll="sec-ativos">🏢 Ativos (${nAt})</button><button class="btn sm" data-dscroll="sec-chamados">🎫 Chamados (${nCh})</button><button class="btn pri" data-tab="imoveis">+ Iniciar contrato</button></div></div>
+    <div class="row" style="gap:8px"><button class="btn sm" data-dscroll="sec-ativos">🏢 Ativos (${nAt})</button><button class="btn sm" data-dscroll="sec-chamados">🎫 Chamados (${nCh})</button><button class="btn" data-dativo="1">+ Contrato já ativo</button><button class="btn pri" data-tab="imoveis">+ Iniciar contrato</button></div></div>
   <div class="stats">
     <div class="stat"><b>${lista.length}</b><span>contratos para iniciar</span></div>
     <div class="stat hl"><b>${conferir}</b><span>documentos aguardando conferência</span></div>
@@ -259,8 +290,17 @@ kanban = function(){
     return `<section class="col"><div class="col-h"><div><h3>${e}</h3><small>${ETAPA_DESC[i]}</small></div><span class="count">${cs.length}</span></div>
     ${cs.length?cs.map(card).join(''):'<div class="empty">Nenhum contrato aqui</div>'}</section>`}).join('')}
   </div></div>
-  <div id="sec-ativos" style="border-top:2px solid var(--line);margin-top:8px;scroll-margin-top:80px">${window.ativosHtml?window.ativosHtml():''}</div>
+  <div id="sec-ativos" style="border-top:2px solid var(--line);margin-top:8px;scroll-margin-top:80px">${(window.ativosHtml?window.ativosHtml():'').replace('<p>Locações em vigor. Os clientes destes contratos usam o portal só para chamados.</p></div>','<p>Locações em vigor. Os clientes destes contratos usam o portal só para chamados.</p></div><button class="btn pri" data-dativo="1">+ Incluir contrato já ativo</button>')}</div>
   <div id="sec-chamados" style="border-top:2px solid var(--line);scroll-margin-top:80px">${chamadosEquipe().replace('<h1>Chamados</h1><p>Abertos pelo cliente no portal. Cada um tem protocolo e fica ligado ao contrato.</p>','<h1>Chamados dos contratos</h1><p>Abertos pelo portal ou pelo WhatsApp. Os que pedem ação aparecem no Dashboard.</p>')}</div>`;
+};
+
+
+/* contratos incluídos como já ativos não cobram documentos/dados da esteira */
+const pendOrig = pend;
+pend = function(pid, papel){
+  const ps=D.partes.filter(x=>x.pessoa_id===pid);
+  if(ps.length && ps.every(x=>{ const c=D.contratos.find(k=>k.id===x.contrato_id); return c && (c.situacao||{}).importado; })) return [];
+  return pendOrig(pid, papel);
 };
 
 /* ---------- Configuração: acessos por pessoa ---------- */
@@ -317,6 +357,7 @@ document.addEventListener('click', e=>{
   const b=e.target.closest('button'); if(!b) return; const d=b.dataset;
   if(d.tab && d.tab!=='acessos' && !pode(d.tab)){ e.stopImmediatePropagation(); return toast('Aba desligada para o seu usuário'); }
   if(d.dscroll){ e.stopImmediatePropagation(); const t=document.getElementById(d.dscroll); if(t) t.scrollIntoView({behavior:'smooth'}); return; }
+  if(d.dativo){ e.stopImmediatePropagation(); S.open=null; S.dModal={tipo:'ativo', gar:'Fiador'}; return render(); }
   if(d.dvenda){ e.stopImmediatePropagation(); S.dModal={tipo:'venda'}; return render(); }
   if(d.dmetas){ e.stopImmediatePropagation(); S.dModal={tipo:'metas'}; return render(); }
   if(d.dmclose){ e.stopImmediatePropagation(); S.dModal=null; return render(); }
@@ -326,6 +367,11 @@ document.addEventListener('click', e=>{
 document.addEventListener('change', e=>{
   const el=e.target;
   if(el.id==='d-mes'||el.id==='d-ano'){ e.stopImmediatePropagation(); S.dMes=+document.getElementById('d-mes').value; S.dAno=+document.getElementById('d-ano').value; return render(); }
+  if(el.id==='da-imv' || el.id==='da-gar'){ e.stopImmediatePropagation(); const f=el.form, keep={};
+    f.querySelectorAll('input').forEach(i=>keep[i.id]=i.value);
+    S.dModal=Object.assign({}, S.dModal, el.id==='da-imv'?{imv:el.value}:{gar:el.value}); render();
+    const nf=document.getElementById('f-dativo'); if(nf) Object.entries(keep).forEach(([k,v])=>{ const i=nf.querySelector('#'+k); if(i && v && !(el.id==='da-imv' && /^da-(pro|alu)/.test(k))) i.value=v; });
+    const sel=document.getElementById('da-cor'); return; }
   if(el.id==='dv-cap'){ e.stopImmediatePropagation(); const c=(D.captacoes||[]).find(k=>k.id===el.value); if(!c) return; const f=c.ficha||{};
     const im=document.getElementById('dv-imv'), v=document.getElementById('dv-val'), cor=document.getElementById('dv-cor');
     if(im) im.value=[f.categoria, f.condominio||f.bairro].filter(Boolean).join(' · ')||('CAP-'+c.numero);
@@ -336,6 +382,13 @@ document.addEventListener('change', e=>{
 }, true);
 document.addEventListener('submit', e=>{
   const f=e.target, g=id=>{ const x=f.querySelector('#'+id); return x?x.value.trim():''; };
+  if(f.id==='f-dativo'){ e.preventDefault(); e.stopImmediatePropagation();
+    const pes=pre=>({nome:g(pre+'-nome'), telefone:g(pre+'-tel'), email:g(pre+'-email')});
+    const p={imovel_id:g('da-imv')||null, imovel:{titulo:g('da-tit'), endereco:g('da-end'), bairro:g('da-bai'), tipo:g('da-tipo')},
+      proprietario:pes('da-pro'), inquilino:pes('da-inq'), fiador:f.querySelector('#da-fia-nome')?pes('da-fia'):null,
+      aluguel:num(g('da-alu')), garantia:g('da-gar'), entrada:g('da-ent')||null, fim:g('da-fim')||null, seguro_venc:g('da-seg')||null, corretor:g('da-cor'), numero:g('da-num')||null};
+    if(!p.aluguel) return toast('Informe o valor do aluguel');
+    return acao(async()=>{ const cid=await q(sb.rpc('equipe_contrato_ativo',{p})); S.dModal=null; S.tab='contratos'; S.open=cid; }, 'Contrato ativo incluído ✅'); }
   if(f.id==='f-dvenda'){ e.preventDefault(); e.stopImmediatePropagation();
     const valor=num(g('dv-val')); if(!valor) return toast('Informe o valor da venda');
     return acao(async()=>{ await q(sb.from('vendas').insert({captacao_id:g('dv-cap')||null, imovel:g('dv-imv'), valor, data:g('dv-data'), corretor:g('dv-cor'), comissao:num(g('dv-com'))||null, obs:g('dv-obs')||null, criado_por:S.me.nome}));
