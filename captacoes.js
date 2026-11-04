@@ -293,7 +293,7 @@ async function buscaCep(c, cep){
 }
 
 document.addEventListener('change', e=>{
-  const el=e.target, c=el.dataset && el.dataset.c && capById(el.dataset.c); if(!c) return;
+  const el=e.target, cid=el.dataset && (el.dataset.c || el.dataset.capfotos), c=cid && capById(cid); if(!c) return;
   if(el.dataset.fic!==undefined){ e.stopImmediatePropagation(); c.ficha=Object.assign({}, c.ficha, {[el.dataset.fic]:el.value.trim()}); salvarFicha(c); if(el.dataset.fic==='cep') buscaCep(c, el.value); if(el.tagName==='SELECT') render(); return; }
   if(el.dataset.ate!==undefined){ e.stopImmediatePropagation(); c.atendimento=Object.assign({}, c.atendimento, {[el.dataset.ate]:el.value.trim()}); salvarFicha(c); return; }
   if(el.dataset.ficarr!==undefined){ e.stopImmediatePropagation(); const k=el.dataset.ficarr, v=new Set(c.ficha[k]||[]); el.checked?v.add(el.value):v.delete(el.value); c.ficha=Object.assign({}, c.ficha, {[k]:[...v]}); salvarFicha(c); render(); return; }
