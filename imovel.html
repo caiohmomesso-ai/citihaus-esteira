@@ -1,0 +1,177 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="robots" content="noindex,nofollow">
+<title>Seu imóvel · Citihaus</title>
+<link rel="icon" href="data:,">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Sora:wght@500;600;700&family=Figtree:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap">
+<link rel="stylesheet" href="style.css?v=9">
+<style>
+html{padding:env(safe-area-inset-top,0) 0 env(safe-area-inset-bottom,0)}body{margin:0;background:var(--bg)}img{max-width:100%}[hidden]{display:none!important}
+.pw{max-width:760px;margin:0 auto;padding:18px 16px 60px}
+.hero{display:flex;align-items:center;gap:12px;margin-bottom:14px}.hero img{height:40px;width:auto}
+.passos{display:flex;gap:6px;margin:14px 0 18px}.passos div{flex:1;height:6px;border-radius:99px;background:var(--line)}.passos .on{background:var(--accent)}
+.grp{margin-bottom:14px}.grp h2{font-size:16px;margin:0 0 12px;display:flex;gap:8px;align-items:center}
+.fgrid label.f{display:flex;flex-direction:column;gap:5px;font-size:12.5px;font-weight:600;color:var(--muted)}
+.fgrid input,.fgrid select,.fgrid textarea{border:1px solid var(--line);border-radius:10px;padding:10px 12px;background:var(--bg);font:inherit;font-size:15px;color:var(--fg);width:100%;box-sizing:border-box}
+.chip{display:inline-flex;gap:6px;align-items:center;padding:7px 11px;border-radius:99px;border:1px solid var(--line);background:var(--surface);font-size:13px;font-weight:600;cursor:pointer}
+.chip input{width:auto!important;padding:0!important;border:0!important;margin:0}
+.chip.on{border-color:var(--accent);background:var(--accent-soft)}
+.fotos{display:grid;grid-template-columns:repeat(auto-fill,minmax(110px,1fr));gap:8px;margin-top:10px}
+.fotos figure{margin:0;position:relative;border-radius:10px;overflow:hidden;border:2px solid var(--line)}
+.fotos figure.capa{border-color:var(--accent)}
+.fotos img{width:100%;height:96px;object-fit:cover;display:block}
+.fotos .del{position:absolute;top:5px;right:5px;border:0;border-radius:99px;background:rgba(0,0,0,.6);color:#fff;width:26px;height:26px;font-size:13px}
+.fotos .tag{position:absolute;top:5px;left:5px;background:var(--accent);color:#fff;font-size:10.5px;font-weight:700;padding:2px 7px;border-radius:99px}
+.barra-fim{position:sticky;bottom:0;background:var(--surface);border-top:1px solid var(--line);padding:12px 16px;display:flex;gap:10px;justify-content:space-between;align-items:center;flex-wrap:wrap;margin:0 -16px}
+@media (max-width:340px){.fgrid{grid-template-columns:1fr}}
+#toast{position:fixed;left:50%;bottom:84px;transform:translateX(-50%);background:var(--fg);color:var(--bg);padding:10px 16px;border-radius:10px;font-size:14px;z-index:50;max-width:calc(100% - 32px)}
+</style>
+</head>
+<body>
+<main class="pw" id="app"><div class="loading">Carregando…</div></main>
+<div id="toast" hidden></div>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
+<script src="config.js?v=9"></script>
+<script>
+(function(){
+'use strict';
+const sb = supabase.createClient(CFG.SUPABASE_URL, CFG.SUPABASE_ANON_KEY);
+const T = new URLSearchParams(location.search).get('t') || '';
+const app = document.getElementById('app');
+let LOGO = '';
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const toast = t => { const el=document.getElementById('toast'); el.textContent=t; el.hidden=false; clearTimeout(toast.h); toast.h=setTimeout(()=>el.hidden=true,3200); };
+const fotoUrl = p => sb.storage.from('fotos').getPublicUrl(p).data.publicUrl;
+const CATEG = ['Apartamento','Casa','Casa em condomínio','Cobertura','Kitnet/Studio','Terreno','Terreno em condomínio','Sala comercial','Loja','Galpão/Barracão','Chácara','Prédio comercial'];
+const SEM_DORM = ['Terreno','Terreno em condomínio','Sala comercial','Loja','Galpão/Barracão','Prédio comercial'];
+const CARAC = ['Varanda','Varanda gourmet','Churrasqueira','Piscina privativa','Ar-condicionado','Armários planejados','Closet','Escritório','Quintal','Área de serviço','Aquecimento solar','Energia solar','Portão eletrônico','Câmeras/alarme'];
+const LAZER = ['Piscina','Academia','Salão de festas','Espaço gourmet','Churrasqueira coletiva','Playground','Quadra','Portaria 24h','Elevador','Pet place','Sauna','Brinquedoteca'];
+let D = null, F = {}, P = {}, FIN = 'Venda', sujo = false, fim = false;
+
+async function carregar(){
+  if(!LOGO){ try{ const h=await (await fetch('index.html')).text(); const m=h.match(/rel="icon" href="(data:image[^"]+)"/); if(m){ LOGO=m[1]; const l=document.querySelector('link[rel=icon]'); if(l) l.href=LOGO; } }catch(_){} }
+  if(!/^[0-9a-f-]{36}$/i.test(T)) return erro('Este link não está completo. Peça um novo link para a Citihaus.');
+  const r = await sb.rpc('cap_portal', {p_token: T});
+  if(r.error || !r.data || r.data.erro) return erro((r.data && r.data.erro) || 'Não conseguimos abrir este link agora. Tente de novo em instantes.');
+  D = r.data; F = Object.assign({}, D.ficha); P = Object.assign({}, D.proprietario); FIN = D.finalidade || 'Venda';
+  render();
+}
+function erro(msg){ app.innerHTML = `<div class="login" style="margin-top:40px"><img src="${LOGO}" alt="Citihaus" style="height:44px;width:auto"><h1>Link indisponível</h1><p class="muted" style="margin:0">${esc(msg)}</p><p class="muted" style="margin:0;font-size:13px">WhatsApp da Citihaus: ${esc(CFG.WHATSAPP)}</p></div>`; }
+
+const inp = (k, rot, o={}) => `<label class="f ${o.full?'full':''}">${rot}<input data-k="${k}" value="${esc(F[k]??'')}" ${o.mode?`inputmode="${o.mode}"`:''} placeholder="${esc(o.ph||'')}"></label>`;
+const sel = (k, rot, ops, o={}) => `<label class="f ${o.full?'full':''}">${rot}<select data-k="${k}"><option value="">—</option>${ops.map(x=>`<option ${String(F[k]??'')===x?'selected':''}>${esc(x)}</option>`).join('')}</select></label>`;
+const chips = (k, ops) => { const v=F[k]||[]; return `<div class="full" style="display:flex;flex-wrap:wrap;gap:6px">${ops.map(x=>`<label class="chip ${v.includes(x)?'on':''}"><input type="checkbox" data-arr="${k}" value="${esc(x)}" ${v.includes(x)?'checked':''} style="accent-color:var(--accent)">${esc(x)}</label>`).join('')}</div>`; };
+
+function render(){
+  if(D.publicado || fim){
+    app.innerHTML = `<div class="hero"><img src="${LOGO}" alt="Citihaus"></div><div class="box" style="text-align:center;padding:30px 20px"><div style="font-size:44px">🧡</div>
+      <h1 style="font-size:22px">${D.publicado?'Seu imóvel já está anunciado':'Obrigado! Recebemos tudo'}</h1>
+      <p class="muted">${D.publicado?'Este link não aceita mais alterações. Para mudar algo, fale com a Citihaus.':'O corretor ' + esc(D.corretor||'da Citihaus') + ' vai revisar os dados e as fotos e falar com você. Se lembrar de mais alguma coisa, é só abrir este mesmo link de novo.'}</p>
+      ${!D.publicado?'<button class="btn" data-voltar="1">Voltar e editar</button>':''}</div>`;
+    return;
+  }
+  const semD = SEM_DORM.includes(F.categoria), fotos = D.fotos||[], nome=(P.nome||'').split(' ')[0];
+  const passos = [!!(F.categoria&&(F.endereco||F.bairro)), !!(F.area_util||F.area_total), !!(F.valor_venda||F.valor_locacao), fotos.length>0];
+  app.innerHTML = `<div class="hero"><img src="${LOGO}" alt="Citihaus"><div><div class="mono" style="font-size:11.5px;color:var(--accent-ink)">CAP-${String(D.numero).padStart(3,'0')}</div><h1 style="font-size:20px;margin:0">Olá${nome?', '+esc(nome):''}! Vamos cadastrar seu imóvel</h1></div></div>
+  <p class="muted" style="margin:0">Preencha o que souber e envie as fotos. Não precisa de senha e você pode voltar a este link quando quiser. Tudo é salvo automaticamente.</p>
+  <div class="passos">${passos.map(x=>`<div class="${x?'on':''}"></div>`).join('')}</div>
+
+  <div class="box grp"><h2>👤 Seus dados</h2><div class="fgrid">
+    <label class="f">Nome completo<input data-p="nome" value="${esc(P.nome)}"></label>
+    <label class="f">E-mail<input data-p="email" type="email" value="${esc(P.email)}"></label>
+    <label class="f full">O que você quer fazer com o imóvel?<select data-fin="1">${['Venda','Locação','Venda e locação'].map(x=>`<option ${FIN===x?'selected':''}>${x==='Venda'?'Vender':x==='Locação'?'Alugar':'Vender ou alugar'}</option>`).join('')}</select></label>
+  </div></div>
+
+  <div class="box grp"><h2>📍 Onde fica</h2><div class="fgrid">
+    ${sel('categoria','Tipo do imóvel',CATEG)}
+    ${inp('condominio','Condomínio / prédio (se tiver)')}
+    ${inp('cep','CEP',{mode:'numeric',ph:'15000-000'})}
+    ${inp('numero','Número')}
+    ${inp('endereco','Endereço (rua/avenida)',{full:true})}
+    ${inp('complemento','Complemento',{ph:'Apto, bloco, lote'})}
+    ${inp('bairro','Bairro')}
+  </div></div>
+
+  <div class="box grp"><h2>📐 Como é</h2><div class="fgrid">
+    ${inp('area_util','Área construída / útil (m²)',{mode:'decimal'})}
+    ${inp('area_total','Área do terreno / total (m²)',{mode:'decimal'})}
+    ${semD?'':inp('dormitorios','Quartos',{mode:'numeric'})}
+    ${semD?'':inp('suites','Suítes',{mode:'numeric'})}
+    ${inp('banheiros','Banheiros',{mode:'numeric'})}
+    ${inp('vagas','Vagas de garagem',{mode:'numeric'})}
+    ${inp('andar','Andar (apartamento)',{mode:'numeric'})}
+    ${inp('ano','Ano de construção',{mode:'numeric'})}
+    ${sel('mobiliado','Mobiliado',['Não','Semi','Sim'])}
+    ${sel('ocupacao','Hoje o imóvel está',['Desocupado','Ocupado pelo proprietário','Alugado'])}
+    <div class="full" style="font-size:12.5px;font-weight:600;color:var(--muted)">O imóvel tem</div>${chips('caracteristicas',CARAC)}
+    <div class="full" style="font-size:12.5px;font-weight:600;color:var(--muted)">O condomínio tem</div>${chips('lazer',LAZER)}
+    <label class="f full">O que seu imóvel tem de especial?<textarea data-k="diferenciais" rows="3" placeholder="Ex.: sol da manhã, reformado em 2025, rua tranquila, perto do shopping">${esc(F.diferenciais||'')}</textarea></label>
+  </div></div>
+
+  <div class="box grp"><h2>💰 Valores</h2><div class="fgrid">
+    ${FIN!=='Locação'?inp('valor_venda','Valor de venda pretendido (R$)',{mode:'decimal'}):''}
+    ${FIN!=='Venda'?inp('valor_locacao','Aluguel pretendido (R$/mês)',{mode:'decimal'}):''}
+    ${inp('valor_condominio','Condomínio (R$/mês)',{mode:'decimal'})}
+    ${inp('valor_iptu','IPTU (R$/ano)',{mode:'decimal'})}
+    ${FIN!=='Locação'?sel('financiamento','Aceita financiamento',['Sim','Não']):''}
+    ${FIN!=='Locação'?sel('permuta','Aceita permuta',['Sim','Não']):''}
+    ${inp('matricula','Nº da matrícula (se souber)')}
+    ${inp('inscricao_iptu','Inscrição do IPTU (se souber)')}
+  </div><div class="muted" style="font-size:12px;margin-top:8px">O corretor confirma os valores com você antes de anunciar.</div></div>
+
+  <div class="box grp"><h2>📸 Fotos <span class="pill p-acc">${fotos.length}</span></h2>
+    <p class="muted" style="margin:0 0 10px;font-size:13px">Fotos na horizontal, com as luzes acesas e os ambientes arrumados ficam melhores. Pode mandar direto do celular.</p>
+    <label class="btn pri" style="cursor:pointer">+ Adicionar fotos<input type="file" hidden multiple accept="image/*" id="fotos-in"></label>
+    ${fotos.length?`<div class="fotos">${fotos.map((f,i)=>`<figure class="${f.capa?'capa':''}"><img src="${esc(fotoUrl(f.path))}" loading="lazy" alt="Foto ${i+1}">${f.capa?'<span class="tag">CAPA</span>':''}${f.minha?`<button class="del" data-del="${f.id}" aria-label="Excluir foto">✕</button>`:''}</figure>`).join('')}</div>`:'<div class="empty" style="margin-top:10px">Nenhuma foto ainda.</div>'}
+  </div>
+
+  <div class="barra-fim"><span class="muted" style="font-size:12.5px">${sujo?'Salvando…':'✓ Tudo salvo'}</span><button class="btn pri" data-fim="1">Concluir e avisar a Citihaus</button></div>`;
+}
+
+let fila = null;
+function salvar(){ sujo=true; atualizaStatus(); clearTimeout(fila); fila=setTimeout(async()=>{
+  const r = await sb.rpc('cap_portal_salvar', {p_token:T, p_ficha:F, p_nome:P.nome||'', p_email:P.email||'', p_finalidade:FIN});
+  sujo=false; if(r.error) toast('Não salvou: '+r.error.message); atualizaStatus(); }, 600); }
+function atualizaStatus(){ const s=document.querySelector('.barra-fim .muted'); if(s) s.textContent = sujo?'Salvando…':'✓ Tudo salvo'; }
+
+async function cep(v){ const d=String(v).replace(/\D/g,''); if(d.length!==8) return;
+  try{ const r=await (await fetch('https://viacep.com.br/ws/'+d+'/json/')).json(); if(r.erro) return;
+    F.endereco=F.endereco||r.logradouro; F.bairro=F.bairro||r.bairro; F.cidade=r.localidade; F.uf=r.uf; salvar(); render(); toast('Endereço preenchido pelo CEP'); }catch(_){} }
+
+function reduzir(file){ return new Promise(ok=>{ const img=new Image(), url=URL.createObjectURL(file);
+  img.onload=()=>{ const M=2000, s=Math.min(1, M/Math.max(img.width,img.height)), cv=document.createElement('canvas'); cv.width=Math.round(img.width*s); cv.height=Math.round(img.height*s);
+    cv.getContext('2d').drawImage(img,0,0,cv.width,cv.height); cv.toBlob(b=>{ URL.revokeObjectURL(url); ok(b||file); }, 'image/jpeg', 0.85); };
+  img.onerror=()=>{ URL.revokeObjectURL(url); ok(file); }; img.src=url; }); }
+async function subir(files){
+  let i=0;
+  for(const file of files){ i++; toast(`Enviando foto ${i} de ${files.length}…`);
+    const blob=await reduzir(file), path=`prop/${T}/${Date.now()}-${i}.jpg`;
+    const up=await sb.storage.from('fotos').upload(path, blob, {contentType:'image/jpeg', upsert:false});
+    if(up.error){ toast('Erro ao enviar a foto '+i+': '+up.error.message); continue; }
+    const r=await sb.rpc('cap_portal_foto', {p_token:T, p_path:path}); if(r.error){ toast(r.error.message); break; } }
+  await carregar(); toast(files.length+' foto(s) enviada(s) ✓');
+}
+
+document.addEventListener('change', e=>{ const el=e.target;
+  if(el.dataset.k){ F[el.dataset.k]=el.value.trim(); salvar(); if(el.dataset.k==='cep') cep(el.value); if(el.tagName==='SELECT') render(); }
+  else if(el.dataset.p){ P[el.dataset.p]=el.value.trim(); salvar(); }
+  else if(el.dataset.fin){ FIN=['Venda','Locação','Venda e locação'][el.selectedIndex]; salvar(); render(); }
+  else if(el.dataset.arr){ const k=el.dataset.arr, v=new Set(F[k]||[]); el.checked?v.add(el.value):v.delete(el.value); F[k]=[...v]; salvar(); render(); }
+  else if(el.id==='fotos-in' && el.files.length) subir([...el.files]);
+});
+document.addEventListener('click', async e=>{ const b=e.target.closest('button'); if(!b) return;
+  if(b.dataset.del){ if(b.dataset.ok!=='1'){ b.dataset.ok='1'; b.textContent='?'; return; }
+    const r=await sb.rpc('cap_portal_foto_del',{p_token:T, p_foto:b.dataset.del}); if(r.error) return toast(r.error.message); await carregar(); toast('Foto excluída'); }
+  if(b.dataset.fim){ clearTimeout(fila); await sb.rpc('cap_portal_salvar', {p_token:T, p_ficha:F, p_nome:P.nome||'', p_email:P.email||'', p_finalidade:FIN}); await sb.rpc('cap_portal_fim',{p_token:T}); fim=true; sujo=false; render(); window.scrollTo(0,0); }
+  if(b.dataset.voltar){ fim=false; render(); }
+});
+carregar();
+})();
+</script>
+</body>
+</html>
