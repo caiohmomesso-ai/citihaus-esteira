@@ -51,7 +51,7 @@ const CATEG = ['Apartamento','Casa','Casa em condomínio','Cobertura','Kitnet/St
 const SEM_DORM = ['Terreno','Terreno em condomínio','Sala comercial','Loja','Galpão/Barracão','Prédio comercial'];
 const CARAC = ['Varanda','Varanda gourmet','Churrasqueira','Piscina privativa','Ar-condicionado','Armários planejados','Closet','Escritório','Quintal','Área de serviço','Aquecimento solar','Energia solar','Portão eletrônico','Câmeras/alarme'];
 const LAZER = ['Piscina','Academia','Salão de festas','Espaço gourmet','Churrasqueira coletiva','Playground','Quadra','Portaria 24h','Elevador','Pet place','Sauna','Brinquedoteca'];
-let D = null, F = {}, P = {}, FIN = 'Venda', sujo = false, fim = false, CH = [], TP = '';
+let D = null, F = {}, P = {}, FIN = 'Venda', sujo = false, fim = false, CH = [], TP = '', COM = false;
 
 async function carregar(){
   if(!LOGO){ try{ const h=await (await fetch('index.html')).text(); const m=h.match(/rel="icon" href="(data:image[^"]+)"/); if(m){ LOGO=m[1]; const l=document.querySelector('link[rel=icon]'); if(l) l.href=LOGO; } }catch(_){} }
@@ -59,7 +59,7 @@ async function carregar(){
   const r = await sb.rpc('cap_portal', {p_token: T});
   if(r.error || !r.data || r.data.erro) return erro((r.data && r.data.erro) || 'Não conseguimos abrir este link agora. Tente de novo em instantes.');
   D = r.data; F = Object.assign({}, D.ficha); P = Object.assign({}, D.proprietario); FIN = D.finalidade || 'Venda';
-  try{ const c = await sb.rpc('cap_portal_chamados', {p_token: T}); CH = c.data || []; }catch(_){ CH = []; }
+  try{ const [c, m] = await Promise.all([sb.rpc('cap_portal_chamados', {p_token: T}), sb.rpc('cap_portal_comercial', {p_token: T})]); CH = c.data || []; COM = !!m.data; }catch(_){ CH = []; COM = false; }
   render();
 }
 function erro(msg){ app.innerHTML = `<div class="login" style="margin-top:40px"><img src="${LOGO}" alt="Citihaus" style="height:44px;width:auto"><h1>Link indisponível</h1><p class="muted" style="margin:0">${esc(msg)}</p><p class="muted" style="margin:0;font-size:13px">WhatsApp da Citihaus: ${esc(CFG.WHATSAPP)}</p></div>`; }
@@ -97,7 +97,7 @@ function render(){
     app.innerHTML = `<div class="hero"><img src="${LOGO}" alt="Citihaus"></div><div class="box" style="text-align:center;padding:30px 20px"><div style="font-size:44px">🧡</div>
       <h1 style="font-size:22px">${D.publicado?'Seu imóvel já está anunciado':'Obrigado! Recebemos tudo'}</h1>
       <p class="muted">${D.publicado?'Este link não aceita mais alterações. Para mudar algo, fale com a Citihaus.':'O corretor ' + esc(D.corretor||'da Citihaus') + ' vai revisar os dados e as fotos e falar com você. Se lembrar de mais alguma coisa, é só abrir este mesmo link de novo.'}</p>
-      ${!D.publicado?'<button class="btn" data-voltar="1">Voltar e editar</button>':''}</div>${chBox()}`;
+      ${!D.publicado?'<button class="btn" data-voltar="1">Voltar e editar</button>':''}</div>${COM?chBox():''}`;
     return;
   }
   const semD = SEM_DORM.includes(F.categoria), fotos = D.fotos||[], nome=(P.nome||'').split(' ')[0];
@@ -105,7 +105,6 @@ function render(){
   app.innerHTML = `<div class="hero"><img src="${LOGO}" alt="Citihaus"><div><div class="mono" style="font-size:11.5px;color:var(--accent-ink)">CAP-${String(D.numero).padStart(3,'0')}</div><h1 style="font-size:20px;margin:0">Olá${nome?', '+esc(nome):''}! Vamos cadastrar seu imóvel</h1></div></div>
   <p class="muted" style="margin:0">Preencha o que souber e envie as fotos. Não precisa de senha e você pode voltar a este link quando quiser. Tudo é salvo automaticamente.</p>
   <div class="passos">${passos.map(x=>`<div class="${x?'on':''}"></div>`).join('')}</div>
-  ${CH.length||TP?chBox():`<div style="margin:-6px 0 14px;font-size:13px"><button type="button" class="btn ghost" data-tp="Dúvida" style="font-size:13px">🎫 Precisa corrigir um valor, um dado ou tirar uma dúvida? Abrir pedido</button></div>`}
 
   <div class="box grp"><h2>👤 Seus dados</h2><div class="fgrid">
     <label class="f">Nome completo<input data-p="nome" value="${esc(P.nome)}"></label>

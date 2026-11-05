@@ -119,6 +119,7 @@ function itens(){
     it.visitas = d.visitas.filter(v=>(it.cap&&v.captacao_id===it.cap.id)||(it.imv&&v.imovel_id===it.imv.id));
     it.propostas = d.propostas.filter(p=>(it.cap&&p.captacao_id===it.cap.id)||(it.imv&&p.imovel_id===it.imv.id));
     it.capch = (d.capch||[]).filter(h=>it.cap&&h.captacao_id===it.cap.id);
+    it.comercial = !!it.cap && it.cap.etapa>=5 && !it.contratos.some(x=>{ const ds=(x.situacao||{}).desocupacao; return !(ds && ds.etapa>=4); });
   });
   return out.sort((a,b)=>b.ordem-a.ordem);
 }
@@ -145,7 +146,7 @@ function cardImovel(it){
       ${pend||prox||abertos?`<div class="row" style="gap:6px;flex-wrap:wrap;margin-top:10px">${pend?`<span class="pill p-bad">💬 ${pend} proposta${pend>1?'s':''} para responder</span>`:''}${prox?`<span class="pill p-info">🗓️ ${prox} visita${prox>1?'s':''} agendada${prox>1?'s':''}</span>`:''}${abertos?`<span class="pill p-warn">🎫 ${abertos} chamado${abertos>1?'s':''} aberto${abertos>1?'s':''}</span>`:''}</div>`:''}
       <div class="row" style="gap:8px;flex-wrap:wrap;margin-top:12px">
         ${it.contratos.map(x=>`<a class="btn ${it.contratos.length===1?'pri':''} sm" style="text-decoration:none" href="${base()}?c=${esc(x.token)}">${x.etapa===6&&!(x.situacao||{}).desocupacao?'Abrir contrato':'Acompanhar contrato'}${it.contratos.length>1?' '+esc(x.numero):''} →</a>`).join('')}
-        ${cp||it.visitas.length||it.propostas.length?`<button class="btn sm ${c?'':'pri'}" data-pcap="${esc(it.k)}">${cp&&cp.etapa<5?'Acompanhar captação':'Anúncio, visitas e propostas'}</button>`:''}
+        ${cp?`<button class="btn sm ${c&&!it.comercial?'':'pri'}" data-pcap="${esc(it.k)}">${cp.etapa<5?'Acompanhar captação':it.comercial?'Anúncio, visitas e propostas':'Ver anúncio'}</button>`:''}
       </div>
     </div></article>`;
 }
@@ -178,7 +179,7 @@ function capHtml(){
   ${cp&&cp.fotos.length?`<div class="box"><h2>📸 Fotos <span class="pill p-acc">${cp.fotos.length}</span></h2><div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(120px,1fr));gap:8px">${cp.fotos.slice(0,24).map(p=>`<a href="${esc(fotoPub(p))}" target="_blank" rel="noopener"><img src="${esc(fotoPub(p))}" loading="lazy" alt="" style="width:100%;height:96px;object-fit:cover;border-radius:10px;display:block"></a>`).join('')}</div></div>`:''}
   ${cp&&(cp.titulo||ficha.length)?`<div class="box"><h2>📝 Anúncio</h2>${ficha.length?`<div class="kv" style="margin-bottom:10px;display:flex;flex-wrap:wrap;gap:6px 16px">${ficha.map(x=>`<span>${x[0]} <b>${esc(x[1])}</b></span>`).join('')}</div>`:''}
     ${cp.titulo?`<h3 style="margin:0 0 6px;font-size:16px">${esc(cp.titulo)}</h3><p style="white-space:pre-line;margin:0;font-size:14px">${esc(cp.descricao||'')}</p>`:'<p class="muted" style="margin:0">O texto do anúncio aparece aqui quando estiver aprovado.</p>'}</div>`:''}
-  ${cp?chamadosCapHtml(it):''}
+  ${it.comercial?chamadosCapHtml(it)+`
   <div class="box"><h2>🗓️ Visitas <span class="pill p-acc">${it.visitas.length}</span></h2>
     ${it.visitas.length?it.visitas.map(v=>{ const s=ST_V[v.status]||ST_V.agendada; return `<div style="padding:9px 0;border-bottom:1px solid var(--line)"><div class="row between"><b>${quando(v.quando)}</b><span class="pill ${s[0]}">${s[1]}</span></div>
       <div class="muted" style="font-size:12.5px">${[v.corretor?'com '+esc(v.corretor):'', v.interesse?'interesse '+'★'.repeat(v.interesse)+'☆'.repeat(5-v.interesse):''].filter(Boolean).join(' · ')}</div>
@@ -193,7 +194,8 @@ function capHtml(){
         ${aberta?`<form class="pprop" data-id="${p.id}" style="margin-top:8px;display:grid;gap:8px"><input name="obs" placeholder="Comentário para a Citihaus (opcional)" style="border:1px solid var(--line);border-radius:10px;padding:9px 12px;background:var(--bg);font:inherit">
           <div class="row" style="gap:6px;flex-wrap:wrap"><button class="btn pri sm" name="st" value="Quero aceitar">👍 Quero aceitar</button><button class="btn sm" name="st" value="Quero conversar">💬 Quero conversar</button><button class="btn sm ghost" name="st" value="Não aceito">✋ Não aceito</button></div></form>`:''}
       </div>`; }).join('')
-      :'<p class="muted" style="margin:0">As propostas recebidas pelo seu imóvel aparecem aqui para você responder.</p>'}</div>`;
+      :'<p class="muted" style="margin:0">As propostas recebidas pelo seu imóvel aparecem aqui para você responder.</p>'}</div>`:''}
+  ${cp&&cp.etapa<5?'<div class="note" style="margin-top:4px">🧡 Quando a captação terminar e o anúncio for publicado, aqui aparecem as visitas, as propostas e os pedidos sobre o anúncio.</div>':''}`;
 }
 const valorBR = v => { let s=String(v||'').replace(/[^\d,.]/g,''); if(s.includes(',')) s=s.replace(/\./g,'').replace(',','.'); else if(/\.\d{3}$/.test(s)||(s.match(/\./g)||[]).length>1) s=s.replace(/\./g,''); return Number(s)||0; };
 const TIPOS_CH = [['Correção de valor','💰','Corrigir o valor anunciado'],['Redução de valor','📉','Propor um valor menor'],['Correção de dados','✏️','Algo errado no anúncio ou na ficha'],['Dúvida','❓','Perguntar algo à Citihaus']];
