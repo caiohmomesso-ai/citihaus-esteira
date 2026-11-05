@@ -84,10 +84,11 @@ loginRender = function(msg){
 };
 async function plusInit(){
   topEl.hidden=true; app.innerHTML='<div class="loading">Abrindo o Citihaus+…</div>';
-  try{ X.d = await q(sb.rpc('plus_home',{p_sessao:ses()})); plusRender(); boasVindas((X.d.pessoa||{}).nome); }
+  try{ X.d = await carregaHome(); plusRender(); boasVindas((X.d.pessoa||{}).nome); }
   catch(err){ setSes(null); loginOrig(String(err.message||err).includes('Sessão')?'Sua sessão expirou. Entre de novo com seu celular e senha.':'Não conseguimos abrir o Citihaus+. Tente de novo.'); }
 }
-async function recarregar(){ try{ X.d = await q(sb.rpc('plus_home',{p_sessao:ses()})); plusRender(); }catch(err){ toast(err.message||String(err)); } }
+async function carregaHome(){ const d = await q(sb.rpc('plus_home',{p_sessao:ses()})); try{ d.capch = await q(sb.rpc('plus_cap_chamados',{p_sessao:ses()})) || []; }catch(_){ d.capch = []; } return d; }
+async function recarregar(){ try{ X.d = await carregaHome(); plusRender(); }catch(err){ toast(err.message||String(err)); } }
 
 /* ---------- monta os imóveis da pessoa ---------- */
 /* etapas reais do sistema (as mesmas da equipe) */
@@ -117,6 +118,7 @@ function itens(){
     it.capa = it.cap && it.cap.fotos[0];
     it.visitas = d.visitas.filter(v=>(it.cap&&v.captacao_id===it.cap.id)||(it.imv&&v.imovel_id===it.imv.id));
     it.propostas = d.propostas.filter(p=>(it.cap&&p.captacao_id===it.cap.id)||(it.imv&&p.imovel_id===it.imv.id));
+    it.capch = (d.capch||[]).filter(h=>it.cap&&h.captacao_id===it.cap.id);
   });
   return out.sort((a,b)=>b.ordem-a.ordem);
 }
@@ -130,7 +132,7 @@ const stTxt = it => { const e=it.et; if(e) return e.lista[e.atual]; return it.im
 function cardImovel(it){
   const c=it.contratos[0], cp=it.cap, pend=it.propostas.filter(p=>p.status==='em_analise'&&!p.status_prop).length;
   const prox=it.visitas.filter(v=>v.status==='agendada' && new Date(v.quando)>new Date()).length;
-  const abertos=it.contratos.reduce((s,x)=>s+(+x.abertos||0),0);
+  const abertos=it.contratos.reduce((s,x)=>s+(+x.abertos||0),0)+(it.capch||[]).filter(h=>h.status!=='resolvido').length;
   const valor = c ? brl(c.aluguel)+' <small>/mês</small>' : cp ? (numBR(cp.ficha.valor_venda)?brlK(numBR(cp.ficha.valor_venda)):numBR(cp.ficha.valor_locacao)?brl(numBR(cp.ficha.valor_locacao))+' <small>/mês</small>':'') : it.imv&&it.imv.valor_venda ? brlK(it.imv.valor_venda) : it.imv&&Number(it.imv.aluguel) ? brl(it.imv.aluguel)+' <small>/mês</small>' : '';
   return `<article class="box" style="padding:0;overflow:hidden">
     ${it.capa?`<div style="height:150px;background:#eee url('${esc(fotoPub(it.capa))}') center/cover"></div>`:`<div style="height:64px;background:linear-gradient(120deg,var(--accent),var(--amber))"></div>`}
@@ -148,7 +150,7 @@ function cardImovel(it){
     </div></article>`;
 }
 function homeHtml(){
-  const d=X.d, p=d.pessoa||{}, L=itens(), ch=d.chamados||[], abertos=ch.filter(h=>h.status!=='resolvido');
+  const d=X.d, p=d.pessoa||{}, L=itens(), capk=id=>{ const it=L.find(x=>x.cap&&x.cap.id===id); return it?it.k:''; }, ch=(d.chamados||[]).concat((d.capch||[]).map(h=>({protocolo:h.protocolo, titulo:h.tipo+(h.valor_sugerido?' · '+brl(h.valor_sugerido):''), status:h.status, updated_at:h.updated_at, imovel:(L.find(x=>x.cap&&x.cap.id===h.captacao_id)||{}).titulo||'Imóvel', capk:capk(h.captacao_id)}))).sort((a,b)=>String(b.updated_at).localeCompare(String(a.updated_at))), abertos=ch.filter(h=>h.status!=='resolvido');
   const docs=d.documentos||[], pendP=d.propostas.filter(x=>x.status==='em_analise'&&!x.status_prop).length;
   return `<section class="hello"><small>Citihaus+</small><h1>Olá${p.nome?', '+esc(p.nome.split(' ')[0]):''} 🧡</h1><p>Tudo dos seus imóveis com a Citihaus, num lugar só.</p>
     <div class="kv"><span>Imóveis <b>${L.length}</b></span><span>Chamados abertos <b>${abertos.length}</b></span>${p.dono?`<span>Propostas para responder <b>${pendP}</b></span>`:''}</div></section>
@@ -156,9 +158,9 @@ function homeHtml(){
   ${L.length?`<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(290px,1fr));gap:14px">${L.map(cardImovel).join('')}</div>`:'<div class="empty">Ainda não há imóveis ligados ao seu cadastro. Fale com a Citihaus.</div>'}
   <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(290px,1fr));gap:14px;margin-top:18px;align-items:start">
     <div class="box"><h2>🎫 Meus chamados</h2>
-      ${ch.length?ch.slice(0,8).map(h=>{ const s=ST_CH[h.status]||ST_CH.aberto; return `<a href="${base()}?c=${esc(h.token)}" style="display:flex;justify-content:space-between;gap:8px;align-items:center;padding:9px 0;border-bottom:1px solid var(--line);text-decoration:none;color:inherit">
+      ${ch.length?ch.slice(0,8).map(h=>{ const s=ST_CH[h.status]||ST_CH.aberto; return `<a href="${h.capk?'#':base()+'?c='+esc(h.token)}" ${h.capk?`data-pcapa="${esc(h.capk)}"`:''} style="display:flex;justify-content:space-between;gap:8px;align-items:center;padding:9px 0;border-bottom:1px solid var(--line);text-decoration:none;color:inherit">
         <div style="min-width:0"><div class="mono" style="font-size:11px;color:var(--muted)">${esc(h.protocolo)} · ${esc(h.imovel)}</div><div style="font-weight:600">${esc(h.titulo)}</div></div><span class="pill ${s[0]}">${s[1]}</span></a>`; }).join('')
-        :'<p class="muted" style="margin:0">Nenhum chamado. Para abrir um, entre no contrato do imóvel.</p>'}</div>
+        :'<p class="muted" style="margin:0">Nenhum chamado. Para abrir um, entre no contrato ou no anúncio do imóvel.</p>'}</div>
     <div class="box"><h2>📂 Meus documentos</h2>
       ${docs.length?docs.map(o=>`<div class="row between" style="padding:7px 0;border-bottom:1px solid var(--line)"><span>${esc(DOC[o.tipo]||o.tipo)}</span><span class="pill ${o.status==='ok'?'p-ok':o.status==='refazer'?'p-bad':'p-info'}">${o.status==='ok'?'Aprovado':o.status==='refazer'?'Enviar de novo':'Em conferência'}</span></div>`).join('')
         :'<p class="muted" style="margin:0">Seus documentos aparecem aqui depois de enviados. Eles valem para todos os seus contratos.</p>'}
@@ -176,6 +178,7 @@ function capHtml(){
   ${cp&&cp.fotos.length?`<div class="box"><h2>📸 Fotos <span class="pill p-acc">${cp.fotos.length}</span></h2><div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(120px,1fr));gap:8px">${cp.fotos.slice(0,24).map(p=>`<a href="${esc(fotoPub(p))}" target="_blank" rel="noopener"><img src="${esc(fotoPub(p))}" loading="lazy" alt="" style="width:100%;height:96px;object-fit:cover;border-radius:10px;display:block"></a>`).join('')}</div></div>`:''}
   ${cp&&(cp.titulo||ficha.length)?`<div class="box"><h2>📝 Anúncio</h2>${ficha.length?`<div class="kv" style="margin-bottom:10px;display:flex;flex-wrap:wrap;gap:6px 16px">${ficha.map(x=>`<span>${x[0]} <b>${esc(x[1])}</b></span>`).join('')}</div>`:''}
     ${cp.titulo?`<h3 style="margin:0 0 6px;font-size:16px">${esc(cp.titulo)}</h3><p style="white-space:pre-line;margin:0;font-size:14px">${esc(cp.descricao||'')}</p>`:'<p class="muted" style="margin:0">O texto do anúncio aparece aqui quando estiver aprovado.</p>'}</div>`:''}
+  ${cp?chamadosCapHtml(it):''}
   <div class="box"><h2>🗓️ Visitas <span class="pill p-acc">${it.visitas.length}</span></h2>
     ${it.visitas.length?it.visitas.map(v=>{ const s=ST_V[v.status]||ST_V.agendada; return `<div style="padding:9px 0;border-bottom:1px solid var(--line)"><div class="row between"><b>${quando(v.quando)}</b><span class="pill ${s[0]}">${s[1]}</span></div>
       <div class="muted" style="font-size:12.5px">${[v.corretor?'com '+esc(v.corretor):'', v.interesse?'interesse '+'★'.repeat(v.interesse)+'☆'.repeat(5-v.interesse):''].filter(Boolean).join(' · ')}</div>
@@ -191,6 +194,27 @@ function capHtml(){
           <div class="row" style="gap:6px;flex-wrap:wrap"><button class="btn pri sm" name="st" value="Quero aceitar">👍 Quero aceitar</button><button class="btn sm" name="st" value="Quero conversar">💬 Quero conversar</button><button class="btn sm ghost" name="st" value="Não aceito">✋ Não aceito</button></div></form>`:''}
       </div>`; }).join('')
       :'<p class="muted" style="margin:0">As propostas recebidas pelo seu imóvel aparecem aqui para você responder.</p>'}</div>`;
+}
+const valorBR = v => { let s=String(v||'').replace(/[^\d,.]/g,''); if(s.includes(',')) s=s.replace(/\./g,'').replace(',','.'); else if(/\.\d{3}$/.test(s)||(s.match(/\./g)||[]).length>1) s=s.replace(/\./g,''); return Number(s)||0; };
+const TIPOS_CH = [['Correção de valor','💰','Corrigir o valor anunciado'],['Redução de valor','📉','Propor um valor menor'],['Correção de dados','✏️','Algo errado no anúncio ou na ficha'],['Dúvida','❓','Perguntar algo à Citihaus']];
+const hora = d => new Date(d).toLocaleString('pt-BR',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'});
+function chamadosCapHtml(it){
+  const cp=it.cap, hs=it.capch||[], f=cp.ficha||{}, atual=numBR(f.valor_venda)||numBR(f.valor_locacao), tp=X.novoTipo||'';
+  const comValor = tp==='Correção de valor'||tp==='Redução de valor';
+  return `<div class="box" id="px-capch"><h2>🎫 Pedidos sobre o anúncio ${hs.length?`<span class="pill p-acc">${hs.length}</span>`:''}</h2>
+   <p class="muted" style="margin:0 0 10px;font-size:13px">Quer mudar o valor, corrigir algum dado ou tirar uma dúvida? Abra um pedido e a Citihaus responde por aqui.</p>
+   <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:8px">${TIPOS_CH.map(([n,ic,d])=>`<button type="button" class="btn ${tp===n?'pri':''}" data-pxtipo="${esc(n)}" style="flex-direction:column;align-items:flex-start;gap:2px;text-align:left;padding:10px 12px;height:auto"><span style="font-size:20px">${ic}</span><b style="font-size:13.5px">${esc(n)}</b><span style="font-size:11.5px;font-weight:500;opacity:.8">${esc(d)}</span></button>`).join('')}</div>
+   ${tp?`<form class="pcapch-novo" data-cap="${cp.id}" data-tipo="${esc(tp)}" style="display:grid;gap:8px;margin-top:12px">
+     ${comValor?`<label class="f" style="display:flex;flex-direction:column;gap:5px;font-size:12.5px;font-weight:600;color:var(--muted)">${tp==='Redução de valor'?'Novo valor que você aceita':'Valor correto'} (R$)${atual?` <span style="font-weight:500">· hoje: ${brl(atual)}</span>`:''}<input name="v" inputmode="decimal" required style="border:1px solid var(--line);border-radius:10px;padding:9px 12px;background:var(--bg);font:inherit;font-size:15px"></label>`:''}
+     <textarea name="t" rows="3" ${comValor?'':'required'} placeholder="${tp==='Correção de dados'?'O que está errado e como fica o certo?':tp==='Dúvida'?'Escreva sua dúvida':'Conte o motivo (opcional)'}" style="border:1px solid var(--line);border-radius:10px;padding:9px 12px;background:var(--bg);font:inherit"></textarea>
+     <div class="row" style="gap:8px;justify-content:flex-end"><button type="button" class="btn ghost sm" data-pxtipo="">Cancelar</button><button class="btn pri sm" type="submit">Enviar pedido</button></div></form>`:''}
+   ${hs.map(h=>{ const s=ST_CH[h.status]||ST_CH.aberto, ic=(TIPOS_CH.find(x=>x[0]===h.tipo)||[])[1]||'🎫';
+     return `<div style="margin-top:12px;padding:12px;border:1px solid var(--line);border-radius:12px">
+       <div class="row between" style="gap:6px;flex-wrap:wrap"><b>${ic} ${esc(h.tipo)}${h.valor_sugerido?' · '+brl(h.valor_sugerido):''}</b><span class="pill ${s[0]}">${s[1]}</span></div>
+       <div class="mono muted" style="font-size:11px">${esc(h.protocolo)} · ${hora(h.created_at)}</div>
+       <div style="display:grid;gap:6px;margin-top:8px">${(h.conversa||[]).filter(m=>m.texto).map(m=>`<div style="max-width:88%;${m.autor==='equipe'?'background:var(--accent-soft)':'margin-left:auto;background:var(--bg)'};border-radius:10px;padding:7px 10px;font-size:13.5px"><div class="muted" style="font-size:11px">${esc(m.autor==='equipe'?'🧡 '+(m.nome||'Citihaus'):'Você')} · ${hora(m.em)}</div><div style="white-space:pre-line">${esc(m.texto)}</div></div>`).join('')}</div>
+       <form class="pcapch-msg" data-id="${h.id}" style="display:flex;gap:6px;margin-top:8px"><input name="t" placeholder="${h.status==='resolvido'?'Reabrir com uma mensagem':'Escrever para a Citihaus'}" style="flex:1;min-width:0;border:1px solid var(--line);border-radius:10px;padding:8px 10px;background:var(--bg);font:inherit"><button class="btn sm" type="submit">Enviar</button></form></div>`; }).join('')}
+  </div>`;
 }
 function dadosModal(){
   const p=X.d.pessoa||{};
@@ -223,19 +247,26 @@ function plusRender(){
 document.addEventListener('click', e=>{
   if(TOKEN || !X.d) return;
   const b=e.target.closest('button,[data-pxfechar]'); if(!b) return; const d=b.dataset;
-  if(d.pcap){ e.stopImmediatePropagation(); X.view='cap'; X.capId=d.pcap; plusRender(); window.scrollTo(0,0); return; }
-  if(d.phome){ e.stopImmediatePropagation(); X.view='home'; plusRender(); return; }
+  if(d.pcap){ e.stopImmediatePropagation(); X.view='cap'; X.capId=d.pcap; X.novoTipo=''; plusRender(); window.scrollTo(0,0); return; }
+  if(d.phome){ e.stopImmediatePropagation(); X.view='home'; X.novoTipo=''; plusRender(); return; }
+  if(d.pxtipo!==undefined){ e.stopImmediatePropagation(); X.novoTipo=d.pxtipo; plusRender(); const fx=document.querySelector('form.pcapch-novo input,form.pcapch-novo textarea'); if(fx) fx.focus(); else { const bx=document.getElementById('px-capch'); if(bx) bx.scrollIntoView({block:'nearest'}); } return; }
   if(d.pxdados){ e.stopImmediatePropagation(); X.editar=true; X.senha=false; plusRender(); return; }
   if(d.pxsenha){ e.stopImmediatePropagation(); X.senha=true; plusRender(); return; }
   if(d.pxfechar!==undefined && (e.target===b || b.tagName==='BUTTON')){ e.stopImmediatePropagation(); X.editar=false; X.senha=false; plusRender(); return; }
   if(d.pxsair){ e.stopImmediatePropagation(); const s=ses(); setSes(null); try{ localStorage.removeItem('citihaus_cli'); }catch(_){} sb.rpc('plus_sair',{p_sessao:s}).then(()=>{},()=>{}); X.d=null; loginOrig(); return; }
 }, true);
+document.addEventListener('click', e=>{ const a=e.target.closest('a[data-pcapa]'); if(!a||TOKEN||!X.d) return; e.preventDefault(); e.stopImmediatePropagation(); X.view='cap'; X.capId=a.dataset.pcapa; X.novoTipo=''; plusRender(); const bx=document.getElementById('px-capch'); if(bx) bx.scrollIntoView(); }, true);
 let ultimoBotao=null;
 document.addEventListener('click', e=>{ const b=e.target.closest('form.pprop button[name=st]'); if(b) ultimoBotao=b.value; }, true);
 document.addEventListener('submit', e=>{
   if(TOKEN || !X.d) return; const f=e.target, g=id=>{ const x=f.querySelector('#'+id); return x?x.value.trim():''; };
   if(f.classList.contains('pprop')){ e.preventDefault(); e.stopImmediatePropagation(); const st=(e.submitter&&e.submitter.value)||ultimoBotao; if(!st) return;
     (async()=>{ try{ await q(sb.rpc('plus_proposta_resp',{p_sessao:ses(), p_id:f.dataset.id, p_status:st, p_obs:f.querySelector('[name=obs]').value})); toast('Resposta enviada à Citihaus ✓'); await recarregar(); }catch(err){ toast(err.message||String(err)); } })(); return; }
+  if(f.classList.contains('pcapch-novo')){ e.preventDefault(); e.stopImmediatePropagation(); const vi=f.querySelector('[name=v]'), v=vi?valorBR(vi.value):null, t=f.querySelector('[name=t]').value.trim();
+    if(vi && !v) return toast('Informe o valor'); const bt=f.querySelector('[type=submit]'); bt.disabled=true;
+    (async()=>{ try{ const r=await q(sb.rpc('plus_cap_chamado_abrir',{p_sessao:ses(), p_captacao:f.dataset.cap, p_tipo:f.dataset.tipo, p_texto:t, p_valor:v||null})); X.novoTipo=''; toast('Pedido '+(r&&r.protocolo||'')+' enviado à Citihaus ✓'); await recarregar(); }catch(err){ bt.disabled=false; toast(err.message||String(err)); } })(); return; }
+  if(f.classList.contains('pcapch-msg')){ e.preventDefault(); e.stopImmediatePropagation(); const t=f.querySelector('[name=t]').value.trim(); if(!t) return;
+    (async()=>{ try{ await q(sb.rpc('plus_cap_chamado_msg',{p_sessao:ses(), p_id:f.dataset.id, p_texto:t})); toast('Mensagem enviada ✓'); await recarregar(); }catch(err){ toast(err.message||String(err)); } })(); return; }
   if(f.id==='px-dados'){ e.preventDefault(); e.stopImmediatePropagation();
     (async()=>{ try{ await q(sb.rpc('plus_salvar',{p_sessao:ses(), p_nome:g('px-nome'), p_telefone:g('px-tel'), p_email:g('px-email'), p_estado:g('px-est')||null, p_banco:f.querySelector('#px-banco')?g('px-banco'):null})); X.editar=false; toast('Dados salvos ✓'); await recarregar(); }catch(err){ toast(err.message||String(err)); } })(); return; }
   if(f.id==='px-senha'){ e.preventDefault(); e.stopImmediatePropagation(); if(g('px-n1')!==g('px-n2')) return toast('As duas senhas não são iguais');

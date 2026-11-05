@@ -51,7 +51,7 @@ const CATEG = ['Apartamento','Casa','Casa em condomínio','Cobertura','Kitnet/St
 const SEM_DORM = ['Terreno','Terreno em condomínio','Sala comercial','Loja','Galpão/Barracão','Prédio comercial'];
 const CARAC = ['Varanda','Varanda gourmet','Churrasqueira','Piscina privativa','Ar-condicionado','Armários planejados','Closet','Escritório','Quintal','Área de serviço','Aquecimento solar','Energia solar','Portão eletrônico','Câmeras/alarme'];
 const LAZER = ['Piscina','Academia','Salão de festas','Espaço gourmet','Churrasqueira coletiva','Playground','Quadra','Portaria 24h','Elevador','Pet place','Sauna','Brinquedoteca'];
-let D = null, F = {}, P = {}, FIN = 'Venda', sujo = false, fim = false;
+let D = null, F = {}, P = {}, FIN = 'Venda', sujo = false, fim = false, CH = [], TP = '';
 
 async function carregar(){
   if(!LOGO){ try{ const h=await (await fetch('index.html')).text(); const m=h.match(/rel="icon" href="(data:image[^"]+)"/); if(m){ LOGO=m[1]; const l=document.querySelector('link[rel=icon]'); if(l) l.href=LOGO; } }catch(_){} }
@@ -59,6 +59,7 @@ async function carregar(){
   const r = await sb.rpc('cap_portal', {p_token: T});
   if(r.error || !r.data || r.data.erro) return erro((r.data && r.data.erro) || 'Não conseguimos abrir este link agora. Tente de novo em instantes.');
   D = r.data; F = Object.assign({}, D.ficha); P = Object.assign({}, D.proprietario); FIN = D.finalidade || 'Venda';
+  try{ const c = await sb.rpc('cap_portal_chamados', {p_token: T}); CH = c.data || []; }catch(_){ CH = []; }
   render();
 }
 function erro(msg){ app.innerHTML = `<div class="login" style="margin-top:40px"><img src="${LOGO}" alt="Citihaus" style="height:44px;width:auto"><h1>Link indisponível</h1><p class="muted" style="margin:0">${esc(msg)}</p><p class="muted" style="margin:0;font-size:13px">WhatsApp da Citihaus: ${esc(CFG.WHATSAPP)}</p></div>`; }
@@ -67,12 +68,36 @@ const inp = (k, rot, o={}) => `<label class="f ${o.full?'full':''}">${rot}<input
 const sel = (k, rot, ops, o={}) => `<label class="f ${o.full?'full':''}">${rot}<select data-k="${k}"><option value="">—</option>${ops.map(x=>`<option ${String(F[k]??'')===x?'selected':''}>${esc(x)}</option>`).join('')}</select></label>`;
 const chips = (k, ops) => { const v=F[k]||[]; return `<div class="full" style="display:flex;flex-wrap:wrap;gap:6px">${ops.map(x=>`<label class="chip ${v.includes(x)?'on':''}"><input type="checkbox" data-arr="${k}" value="${esc(x)}" ${v.includes(x)?'checked':''} style="accent-color:var(--accent)">${esc(x)}</label>`).join('')}</div>`; };
 
+const brl = v => 'R$ ' + Number(v||0).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2});
+const numBR = v => { const x=String(v||'').replace(/[^\d,.-]/g,''); return Number(x.includes(',')?x.replace(/\./g,'').replace(',','.'):x)||0; };
+const hora = d => new Date(d).toLocaleString('pt-BR',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'});
+const valorBR = v => { let s=String(v||'').replace(/[^\d,.]/g,''); if(s.includes(',')) s=s.replace(/\./g,'').replace(',','.'); else if(/\.\d{3}$/.test(s)||(s.match(/\./g)||[]).length>1) s=s.replace(/\./g,''); return Number(s)||0; };
+const TIPOS = [['Correção de valor','💰','Corrigir o valor anunciado'],['Redução de valor','📉','Propor um valor menor'],['Correção de dados','✏️','Algo errado no anúncio ou na ficha'],['Dúvida','❓','Perguntar algo à Citihaus']];
+const STC = {aberto:['p-warn','Aberto'], atendimento:['p-info','Em atendimento'], resolvido:['p-ok','Resolvido']};
+const campo = 'border:1px solid var(--line);border-radius:10px;padding:9px 12px;background:var(--bg);font:inherit;font-size:15px;color:var(--fg);width:100%;box-sizing:border-box';
+function chBox(){
+  const atual = numBR(F.valor_venda)||numBR(F.valor_locacao), comValor = TP==='Correção de valor'||TP==='Redução de valor';
+  return `<div class="box grp" id="chbox" style="text-align:left"><h2>🎫 Pedidos sobre o seu imóvel</h2>
+  <p class="muted" style="margin:0 0 10px;font-size:13px">Quer mudar o valor, corrigir algum dado ou tirar uma dúvida? Abra um pedido e a Citihaus responde por aqui.</p>
+  <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:8px">${TIPOS.map(([n,ic,d])=>`<button type="button" class="btn ${TP===n?'pri':''}" data-tp="${esc(n)}" style="flex-direction:column;align-items:flex-start;gap:2px;text-align:left;padding:10px 12px;height:auto"><span style="font-size:20px">${ic}</span><b style="font-size:13.5px">${esc(n)}</b><span style="font-size:11.5px;font-weight:500;opacity:.8">${esc(d)}</span></button>`).join('')}</div>
+  ${TP?`<form id="ch-novo" style="display:grid;gap:8px;margin-top:12px">
+    ${comValor?`<label style="display:flex;flex-direction:column;gap:5px;font-size:12.5px;font-weight:600;color:var(--muted)">${TP==='Redução de valor'?'Novo valor que você aceita':'Valor correto'} (R$)${atual?' · hoje: '+brl(atual):''}<input id="ch-v" inputmode="decimal" required style="${campo}"></label>`:''}
+    <textarea id="ch-t" rows="3" ${comValor?'':'required'} placeholder="${TP==='Correção de dados'?'O que está errado e como fica o certo?':TP==='Dúvida'?'Escreva sua dúvida':'Conte o motivo (opcional)'}" style="${campo}"></textarea>
+    <div style="display:flex;gap:8px;justify-content:flex-end"><button type="button" class="btn ghost" data-tp="">Cancelar</button><button class="btn pri" type="submit">Enviar pedido</button></div></form>`:''}
+  ${CH.map(h=>{ const st=STC[h.status]||STC.aberto, ic=(TIPOS.find(x=>x[0]===h.tipo)||[])[1]||'🎫';
+    return `<div style="margin-top:12px;padding:12px;border:1px solid var(--line);border-radius:12px">
+      <div style="display:flex;justify-content:space-between;gap:6px;flex-wrap:wrap"><b>${ic} ${esc(h.tipo)}${h.valor_sugerido?' · '+brl(h.valor_sugerido):''}</b><span class="pill ${st[0]}">${st[1]}</span></div>
+      <div class="mono muted" style="font-size:11px">${esc(h.protocolo)} · ${hora(h.created_at)}</div>
+      <div style="display:grid;gap:6px;margin-top:8px">${(h.conversa||[]).filter(m=>m.texto).map(m=>`<div style="max-width:88%;${m.autor==='equipe'?'background:var(--accent-soft)':'margin-left:auto;background:var(--bg)'};border-radius:10px;padding:7px 10px;font-size:13.5px"><div class="muted" style="font-size:11px">${esc(m.autor==='equipe'?'🧡 '+(m.nome||'Citihaus'):'Você')} · ${hora(m.em)}</div><div style="white-space:pre-line">${esc(m.texto)}</div></div>`).join('')}</div>
+      <form class="ch-msg" data-id="${h.id}" style="display:flex;gap:6px;margin-top:8px"><input name="t" placeholder="${h.status==='resolvido'?'Reabrir com uma mensagem':'Escrever para a Citihaus'}" style="${campo};flex:1;min-width:0"><button class="btn" type="submit">Enviar</button></form></div>`; }).join('')}
+  </div>`;
+}
 function render(){
   if(D.publicado || fim){
     app.innerHTML = `<div class="hero"><img src="${LOGO}" alt="Citihaus"></div><div class="box" style="text-align:center;padding:30px 20px"><div style="font-size:44px">🧡</div>
       <h1 style="font-size:22px">${D.publicado?'Seu imóvel já está anunciado':'Obrigado! Recebemos tudo'}</h1>
       <p class="muted">${D.publicado?'Este link não aceita mais alterações. Para mudar algo, fale com a Citihaus.':'O corretor ' + esc(D.corretor||'da Citihaus') + ' vai revisar os dados e as fotos e falar com você. Se lembrar de mais alguma coisa, é só abrir este mesmo link de novo.'}</p>
-      ${!D.publicado?'<button class="btn" data-voltar="1">Voltar e editar</button>':''}</div>`;
+      ${!D.publicado?'<button class="btn" data-voltar="1">Voltar e editar</button>':''}</div>${chBox()}`;
     return;
   }
   const semD = SEM_DORM.includes(F.categoria), fotos = D.fotos||[], nome=(P.nome||'').split(' ')[0];
@@ -80,6 +105,7 @@ function render(){
   app.innerHTML = `<div class="hero"><img src="${LOGO}" alt="Citihaus"><div><div class="mono" style="font-size:11.5px;color:var(--accent-ink)">CAP-${String(D.numero).padStart(3,'0')}</div><h1 style="font-size:20px;margin:0">Olá${nome?', '+esc(nome):''}! Vamos cadastrar seu imóvel</h1></div></div>
   <p class="muted" style="margin:0">Preencha o que souber e envie as fotos. Não precisa de senha e você pode voltar a este link quando quiser. Tudo é salvo automaticamente.</p>
   <div class="passos">${passos.map(x=>`<div class="${x?'on':''}"></div>`).join('')}</div>
+  ${CH.length||TP?chBox():`<div style="margin:-6px 0 14px;font-size:13px"><button type="button" class="btn ghost" data-tp="Dúvida" style="font-size:13px">🎫 Precisa corrigir um valor, um dado ou tirar uma dúvida? Abrir pedido</button></div>`}
 
   <div class="box grp"><h2>👤 Seus dados</h2><div class="fgrid">
     <label class="f">Nome completo<input data-p="nome" value="${esc(P.nome)}"></label>
@@ -164,7 +190,17 @@ document.addEventListener('change', e=>{ const el=e.target;
   else if(el.dataset.arr){ const k=el.dataset.arr, v=new Set(F[k]||[]); el.checked?v.add(el.value):v.delete(el.value); F[k]=[...v]; salvar(); render(); }
   else if(el.id==='fotos-in' && el.files.length) subir([...el.files]);
 });
+document.addEventListener('submit', async e=>{ const f=e.target;
+  if(f.id==='ch-novo'){ e.preventDefault(); const vi=document.getElementById('ch-v'), v=vi?valorBR(vi.value):null, t=document.getElementById('ch-t').value.trim();
+    if(vi && !v) return toast('Informe o valor'); f.querySelector('[type=submit]').disabled=true;
+    const r=await sb.rpc('cap_portal_chamado_abrir',{p_token:T, p_tipo:TP, p_texto:t, p_valor:v||null});
+    if(r.error){ f.querySelector('[type=submit]').disabled=false; return toast(r.error.message); }
+    TP=''; await carregar(); toast('Pedido '+((r.data&&r.data.protocolo)||'')+' enviado à Citihaus ✓'); const bx=document.getElementById('chbox'); if(bx) bx.scrollIntoView({block:'nearest'}); }
+  if(f.classList.contains('ch-msg')){ e.preventDefault(); const t=f.querySelector('[name=t]').value.trim(); if(!t) return;
+    const r=await sb.rpc('cap_portal_chamado_msg',{p_token:T, p_id:f.dataset.id, p_texto:t}); if(r.error) return toast(r.error.message); await carregar(); toast('Mensagem enviada ✓'); }
+});
 document.addEventListener('click', async e=>{ const b=e.target.closest('button'); if(!b) return;
+  if(b.dataset.tp!==undefined){ TP=b.dataset.tp; render(); const x=document.querySelector('#ch-novo input,#ch-novo textarea'); if(x) x.focus(); else { const bx=document.getElementById('chbox'); if(bx) bx.scrollIntoView({block:'nearest'}); } return; }
   if(b.dataset.del){ if(b.dataset.ok!=='1'){ b.dataset.ok='1'; b.textContent='?'; return; }
     const r=await sb.rpc('cap_portal_foto_del',{p_token:T, p_foto:b.dataset.del}); if(r.error) return toast(r.error.message); await carregar(); toast('Foto excluída'); }
   if(b.dataset.fim){ clearTimeout(fila); await sb.rpc('cap_portal_salvar', {p_token:T, p_ficha:F, p_nome:P.nome||'', p_email:P.email||'', p_finalidade:FIN}); await sb.rpc('cap_portal_fim',{p_token:T}); fim=true; sujo=false; render(); window.scrollTo(0,0); }
