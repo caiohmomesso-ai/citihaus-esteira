@@ -29,6 +29,7 @@ carregar = async function(){
   if(primeira){ primeira=false; const h=(location.hash||'').slice(1); S.tab = (h==='ativos'||h==='chamados') ? 'contratos' : (ABAS.some(a=>a[0]===h) ? h : 'dashboard'); }
   await carregarOrig();
   try{
+    try{ const [vi, pr] = await Promise.all([q(sb.from('visitas').select('*').order('quando',{ascending:false})), q(sb.from('propostas').select('*').order('created_at',{ascending:false}))]); D.visitas=vi; D.propostas=pr; }catch(e){ D.visitas=D.visitas||[]; D.propostas=D.propostas||[]; }
     const [vs, ms, el, eq] = await Promise.all([
       q(sb.from('vendas').select('*').order('data',{ascending:false})),
       q(sb.from('metas').select('*')),
@@ -424,6 +425,7 @@ render = function(){
     const ref=dr.querySelector('.d-body > .sec.box'); if(ref) ref.insertAdjacentHTML('beforebegin', boxLinkProp(c)); }
   if(S.tab==='mensagens') document.querySelectorAll('#app [data-msgdel]').forEach(b=>{ if(!b.previousElementSibling || !b.previousElementSibling.dataset.comwa) b.insertAdjacentHTML('beforebegin', `<button class="btn sm" data-comwa="${b.dataset.msgdel}" style="margin-right:6px">💬 WhatsApp</button>`); });
   if(S.tab==='captacoes' && isAdm()){ const ib=document.querySelector('#app [data-capinteg]'); if(ib && !document.querySelector('#app [data-capdrive]')) ib.insertAdjacentHTML('beforebegin','<button class="btn" data-capdrive="1">📁 Google Drive</button>'); }
+  if(dr && c && !document.getElementById('cap-comercial')){ const hs=[...dr.querySelectorAll('.d-body > .sec')].find(x=>(x.querySelector('h3')||{}).textContent==='Histórico'); if(hs) hs.insertAdjacentHTML('beforebegin', comercialHtml(c)); }
   if(dr && c && !document.getElementById('cap-drive')){ const s2=dr.querySelector('#cap-s2'); const h3=s2&&s2.firstElementChild;
     if(h3) h3.insertAdjacentHTML('afterend', `<div id="cap-drive" style="display:flex;gap:8px;align-items:center;background:var(--info-soft);border-radius:10px;padding:8px 12px;margin-bottom:10px;font-size:12.5px">📁 <span>Pasta no Drive: <b>Citihaus · Captações / ${esc(capNome(c))}</b>. As fotos que entrarem lá aparecem aqui sozinhas.</span></div>`); }
   prepararArrastar();
@@ -747,6 +749,61 @@ function agendarAuto(el){
 document.addEventListener('input', e=>agendarAuto(e.target), true);
 document.addEventListener('change', e=>{ const f=e.target.form; if(f && AUTO_FORMS.includes(f.id) && (e.target.type==='date'||e.target.tagName==='SELECT')) agendarAuto(e.target); }, true);
 document.addEventListener('submit', e=>{ const f=e.target; if(!AUTO_FORMS.includes(f.id)) return; e.preventDefault(); e.stopImmediatePropagation(); clearTimeout(filaAuto[f.id]); autoSalvar(f); }, true);
+
+/* ---------- comercial: visitas e propostas na captação ---------- */
+D.visitas = D.visitas || []; D.propostas = D.propostas || [];
+const VST = [['agendada','Agendada'],['realizada','Realizada'],['cancelada','Cancelada'],['nao_compareceu','Não compareceu']];
+const PST = [['em_analise','Em análise'],['aceita','Aceita'],['recusada','Recusada'],['contraproposta','Contraproposta'],['cancelada','Cancelada']];
+const dtLocal = d => { const t=new Date(d); t.setMinutes(t.getMinutes()-t.getTimezoneOffset()); return t.toISOString().slice(0,16); };
+function comercialHtml(c){
+  const vs=D.visitas.filter(v=>v.captacao_id===c.id), ps=D.propostas.filter(p=>p.captacao_id===c.id), cors=corretores();
+  const sel=(attr,id,ops,v)=>`<select ${attr}="${id}" style="border:1px solid var(--line);border-radius:8px;padding:5px 8px;background:var(--bg)">${ops.map(([k,n])=>`<option value="${k}" ${v===k?'selected':''}>${n}</option>`).join('')}</select>`;
+  return `<div class="sec box" id="cap-comercial"><h3>🗓️ Visitas e propostas <span class="muted" style="font-size:12px;font-weight:500">· o proprietário acompanha tudo no Citihaus+</span></h3>
+  <div style="font-weight:700;font-size:13px;margin:8px 0 6px">Visitas (${vs.length})</div>
+  ${vs.map(v=>`<div style="padding:8px 10px;border:1px solid var(--line);border-radius:10px;margin-bottom:6px">
+    <div class="row between" style="gap:6px;flex-wrap:wrap"><b>${new Date(v.quando).toLocaleString('pt-BR',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'})}</b>${sel('data-visst',v.id,VST,v.status)}</div>
+    <div class="muted" style="font-size:12.5px">${esc(v.visitante||'Visitante')}${v.visitante_tel?' · '+esc(v.visitante_tel):''}${v.corretor?' · '+esc(v.corretor):''}</div>
+    <div class="row" style="gap:6px;margin-top:6px;flex-wrap:wrap"><input data-visfb="${v.id}" value="${esc(v.feedback||'')}" placeholder="Retorno da visita (o proprietário vê)" style="flex:1;min-width:180px;border:1px solid var(--line);border-radius:8px;padding:6px 8px;background:var(--bg)">
+      ${sel('data-visint',v.id,[['','Interesse'],['1','★'],['2','★★'],['3','★★★'],['4','★★★★'],['5','★★★★★']],v.interesse?String(v.interesse):'')}
+      ${v.visitante_tel?waBtn(v.visitante_tel,`Olá${v.visitante?', '+primeiro(v.visitante):''}! Aqui é da Citihaus 🧡 Confirmando a visita ao imóvel ${capNome(c).replace(/^CAP-\d+ · /,'')} em ${new Date(v.quando).toLocaleString('pt-BR',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'})}.`, 'Confirmar'):''}
+      ${isAdm()?`<button class="btn sm ghost" style="color:var(--bad)" data-visdel="${v.id}">🗑</button>`:''}</div></div>`).join('')||'<p class="muted" style="margin:0 0 6px">Nenhuma visita ainda.</p>'}
+  <form id="f-vis" data-c="${c.id}" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:8px;align-items:end;margin:8px 0 14px">
+    <label class="f">Data e hora<input id="vi-q" type="datetime-local" required></label><label class="f">Visitante<input id="vi-n" placeholder="Nome"></label>
+    <label class="f">Celular<input id="vi-t" inputmode="tel"></label><label class="f">Corretor<select id="vi-c">${cors.map(n=>`<option ${n===S.me.nome?'selected':''}>${esc(n)}</option>`).join('')}</select></label>
+    <button class="btn" type="submit">+ Agendar visita</button></form>
+  <div style="font-weight:700;font-size:13px;margin:8px 0 6px">Propostas (${ps.length})</div>
+  ${ps.map(p=>`<div style="padding:8px 10px;border:1px solid var(--line);border-radius:10px;margin-bottom:6px">
+    <div class="row between" style="gap:6px;flex-wrap:wrap"><b>${brl(p.valor)}${p.tipo==='Locação'?'/mês':''}</b>${sel('data-propst',p.id,PST,p.status)}</div>
+    <div class="muted" style="font-size:12.5px">${esc(p.tipo)} · ${dataBR(p.data)} · ${esc(p.proponente||'Proponente')}${p.proponente_tel?' · '+esc(p.proponente_tel):''}${p.corretor?' · '+esc(p.corretor):''}</div>
+    ${p.condicoes?`<div style="font-size:13px;margin-top:4px">${esc(p.condicoes)}</div>`:''}
+    ${p.status_prop?`<div style="margin-top:6px"><span class="pill ${p.status_prop==='Quero aceitar'?'p-ok':p.status_prop==='Não aceito'?'p-bad':'p-info'}">Proprietário: ${esc(p.status_prop)}</span>${p.resposta_prop?` <span style="font-size:13px">“${esc(p.resposta_prop)}”</span>`:''}</div>`:(p.status==='em_analise'?'<div class="muted" style="font-size:12px;margin-top:4px">Aguardando o proprietário responder no Citihaus+</div>':'')}
+    ${isAdm()?`<div class="row" style="justify-content:flex-end"><button class="btn sm ghost" style="color:var(--bad)" data-propdel="${p.id}">🗑</button></div>`:''}</div>`).join('')||'<p class="muted" style="margin:0 0 6px">Nenhuma proposta ainda.</p>'}
+  <form id="f-prop" data-c="${c.id}" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:8px;align-items:end;margin-top:8px">
+    <label class="f">Proponente<input id="pr-n" placeholder="Nome"></label><label class="f">Celular<input id="pr-t" inputmode="tel"></label>
+    <label class="f">Tipo<select id="pr-tp"><option ${c.finalidade==='Locação'?'':'selected'}>Venda</option><option ${c.finalidade==='Locação'?'selected':''}>Locação</option></select></label>
+    <label class="f">Valor (R$)<input id="pr-v" inputmode="decimal" required></label>
+    <label class="f" style="grid-column:1/-1">Condições<input id="pr-c" placeholder="Ex.: 30% de entrada + financiamento Caixa, entrega em 60 dias"></label>
+    <button class="btn" type="submit">+ Registrar proposta</button></form></div>`;
+}
+document.addEventListener('submit', e=>{
+  const f=e.target, g=id=>{ const x=f.querySelector('#'+id); return x?x.value.trim():''; };
+  if(f.id==='f-vis'){ e.preventDefault(); e.stopImmediatePropagation(); if(!g('vi-q')) return toast('Informe a data e a hora');
+    return acao(async()=>{ await q(sb.from('visitas').insert({captacao_id:f.dataset.c, quando:new Date(g('vi-q')).toISOString(), visitante:g('vi-n'), visitante_tel:g('vi-t')||null, corretor:g('vi-c')})); }, 'Visita agendada 🗓️'); }
+  if(f.id==='f-prop'){ e.preventDefault(); e.stopImmediatePropagation(); const v=num(g('pr-v')); if(!v) return toast('Informe o valor da proposta');
+    return acao(async()=>{ await q(sb.from('propostas').insert({captacao_id:f.dataset.c, proponente:g('pr-n'), proponente_tel:g('pr-t')||null, tipo:g('pr-tp'), valor:v, condicoes:g('pr-c')||null, corretor:S.me.nome})); }, 'Proposta registrada. O proprietário já vê no Citihaus+'); }
+}, true);
+document.addEventListener('change', e=>{
+  const el=e.target, d=el.dataset||{};
+  if(d.visst||d.visint||d.visfb){ e.stopImmediatePropagation(); const id=d.visst||d.visint||d.visfb, v=D.visitas.find(x=>x.id===id); if(!v) return;
+    const patch = d.visst?{status:el.value}:d.visint?{interesse:el.value?+el.value:null}:{feedback:el.value.trim()||null};
+    (async()=>{ try{ await q(sb.from('visitas').update(patch).eq('id',id)); Object.assign(v,patch); toast('Visita atualizada ✓'); }catch(err){ falha(err); } })(); }
+  if(d.propst){ e.stopImmediatePropagation(); const p=D.propostas.find(x=>x.id===d.propst); if(!p) return;
+    (async()=>{ try{ await q(sb.from('propostas').update({status:el.value}).eq('id',p.id)); p.status=el.value; toast('Proposta atualizada ✓'); }catch(err){ falha(err); } })(); }
+}, true);
+document.addEventListener('click', e=>{ const b=e.target.closest('button'); if(!b) return;
+  if(b.dataset.visdel){ e.stopImmediatePropagation(); if(b.dataset.ok!=='1'){ b.dataset.ok='1'; b.textContent='Confirmar?'; return; } return acao(async()=>{ await q(sb.from('visitas').delete().eq('id',b.dataset.visdel)); }, 'Visita excluída'); }
+  if(b.dataset.propdel){ e.stopImmediatePropagation(); if(b.dataset.ok!=='1'){ b.dataset.ok='1'; b.textContent='Confirmar?'; return; } return acao(async()=>{ await q(sb.from('propostas').delete().eq('id',b.dataset.propdel)); }, 'Proposta excluída'); }
+}, true);
 
 if(S.me) carregar().then(render).catch(()=>{});
 })();

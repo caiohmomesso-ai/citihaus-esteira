@@ -41,6 +41,9 @@ async function entrar(tel, senha){
   if(!error) return equipeInit();
   const r = await sb.rpc('portal_login', {p_tel: t, p_senha: senha});
   const d = r.data || {};
+  if(d.sessao){ try{ localStorage.setItem('citihaus_plus', d.sessao); localStorage.setItem('citihaus_cli', JSON.stringify(d.contratos||[])); sessionStorage.setItem('citihaus_plus_boasvindas','1'); }catch(_){}
+    try{ window.citihausChime && window.citihausChime(); }catch(_){}
+    setTimeout(()=>{ location.href = urlSite() + '?plus=1'; }, 650); return; }
   if(d.contratos && d.contratos.length){
     try{ localStorage.setItem('citihaus_cli', JSON.stringify(d.contratos)); }catch(_){}
     if(d.contratos.length === 1){ location.href = urlSite() + '?c=' + d.contratos[0].token; return; }
