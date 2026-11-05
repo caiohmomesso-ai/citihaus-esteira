@@ -62,7 +62,7 @@ revoke execute on function public._cap_ch_lista(uuid,uuid) from public, anon, au
 
 -- Citihaus+ (sessão do cliente)
 create or replace function public.plus_cap_chamados(p_sessao text) returns jsonb
-language plpgsql stable security definer set search_path = public as $$
+language plpgsql volatile security definer set search_path = public as $$
 declare pid uuid := public._plus_pessoa(p_sessao);
 begin return public._cap_ch_lista(pid, null); end $$;
 grant execute on function public.plus_cap_chamados(text) to anon, authenticated;

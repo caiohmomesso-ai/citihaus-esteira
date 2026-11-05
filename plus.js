@@ -274,5 +274,6 @@ document.addEventListener('submit', e=>{
 }, true);
 document.addEventListener('keydown', e=>{ if(e.key==='Escape' && X.editar && !TOKEN){ X.editar=false; X.senha=false; plusRender(); } });
 /* se a tela de login já foi desenhada antes deste arquivo carregar, abre o Citihaus+ direto */
-if(ses() && !S.me && document.getElementById('login')) plusInit();
+/* a tela de login pode ser desenhada depois (ela espera o banco); espera até 8s e abre o Citihaus+ */
+if(ses() && !S.me){ let n=0; const tick=()=>{ if(S.me || X.d || !ses()) return; if(document.getElementById('login')) return plusInit(); if(++n<40) setTimeout(tick,200); }; tick(); }
 })();
