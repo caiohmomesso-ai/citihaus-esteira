@@ -283,8 +283,13 @@ kanban = function(){
   const conferir=lista.reduce((a,c)=>a+aConferir(c),0);
   const cliente=lista.filter(c=>c.etapa===0).reduce((a,c)=>a+partesDe(c).reduce((b,x)=>b+pend(x.pessoa_id,x.papel).length,0),0);
   const prontos=lista.filter(c=>!gate(c).length).length, nAt=D.contratos.filter(c=>c.etapa===6&&!emDesoc(c)&&!encerrado(c)).length, nCh=D.chamados.filter(h=>h.status!=='resolvido').length;
-  return `<div class="head"><div><h1>Contratos de locação</h1><p>Em cima, os contratos que vão iniciar. Embaixo, os ativos e os chamados de cada contrato.</p></div>
-    <div class="row" style="gap:8px"><button class="btn sm" data-dscroll="sec-ativos">🏢 Ativos (${nAt})</button><button class="btn sm" data-dscroll="sec-desoc">🚚 Desocupação (${D.contratos.filter(emDesoc).length})</button><button class="btn sm" data-dscroll="sec-chamados">🎫 Chamados (${nCh})</button><button class="btn" data-dativo="1">+ Contrato já ativo</button><button class="btn pri" data-tab="imoveis">+ Iniciar contrato</button></div></div>
+  const chHtml = chamadosEquipe().replace('<h1>Chamados</h1><p>Abertos pelo cliente no portal. Cada um tem protocolo e fica ligado ao contrato.</p>','<h1>🎫 Chamados</h1><p>Abertos pelo portal ou pelo WhatsApp, ligados a cada contrato. Os que pedem ação aparecem no Dashboard.</p>');
+  return `<div class="row between" style="gap:8px;flex-wrap:wrap;margin:4px 0 6px">
+    <div class="row" style="gap:6px;flex-wrap:wrap"><button class="btn sm" data-dscroll="sec-chamados">🎫 Chamados (${nCh})</button><button class="btn sm" data-dscroll="sec-contratos">📄 Contratos (${lista.length})</button><button class="btn sm" data-dscroll="sec-desoc">🚚 Desocupação (${D.contratos.filter(emDesoc).length})</button><button class="btn sm" data-dscroll="sec-ativos">🏢 Imóveis ativos (${nAt})</button></div>
+    <div class="row" style="gap:8px"><button class="btn" data-dativo="1">+ Contrato já ativo</button><button class="btn pri" data-tab="imoveis">+ Iniciar contrato</button></div></div>
+  <div id="sec-chamados" style="scroll-margin-top:80px">${chHtml}</div>
+  <div id="sec-contratos" style="border-top:2px solid var(--line);scroll-margin-top:80px">
+  <div class="head"><div><h1>📄 Contratos de locação</h1><p>Do cadastro até as chaves. Arraste o card para avançar ou voltar etapa.</p></div></div>
   <div class="stats">
     <div class="stat"><b>${lista.length}</b><span>contratos para iniciar</span></div>
     <div class="stat hl"><b>${conferir}</b><span>documentos aguardando conferência</span></div>
@@ -295,11 +300,24 @@ kanban = function(){
   ${ETAPAS.slice(0,6).map((e,i)=>{const cs=lista.filter(c=>c.etapa===i);
     return `<section class="col" data-drop="ct" data-et="${i}"><div class="col-h"><div><h3>${e}</h3><small>${ETAPA_DESC[i]}</small></div><span class="count">${cs.length}</span></div>
     ${cs.length?cs.map(card).join(''):'<div class="empty">Nenhum contrato aqui</div>'}</section>`}).join('')}
-  </div></div>
-  <div id="sec-ativos" style="border-top:2px solid var(--line);margin-top:8px;scroll-margin-top:80px">${ativosSemDesoc()}</div>
+  </div></div></div>
   <div id="sec-desoc" style="border-top:2px solid var(--line);scroll-margin-top:80px">${desocHtml()}</div>
-  <div id="sec-chamados" style="border-top:2px solid var(--line);scroll-margin-top:80px">${chamadosEquipe().replace('<h1>Chamados</h1><p>Abertos pelo cliente no portal. Cada um tem protocolo e fica ligado ao contrato.</p>','<h1>Chamados dos contratos</h1><p>Abertos pelo portal ou pelo WhatsApp. Os que pedem ação aparecem no Dashboard.</p>')}</div>`;
+  <div id="sec-ativos" style="border-top:2px solid var(--line);margin-top:8px;scroll-margin-top:80px">${ativosSemDesoc()}</div>`;
 };
+function filtrarAtivos(){
+  const box=document.getElementById('sec-ativos'); if(!box) return;
+  const t=(S.atvBusca||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().trim(), ff=S.atvFil||'todos'; let n=0, tot=0;
+  box.querySelectorAll('tbody tr').forEach(tr=>{ if(!tr.querySelector('[data-open]')) return; tot++;
+    const txt=tr.textContent.normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase();
+    const ch=!!tr.querySelector('td:nth-child(7) .p-warn'), pe=!!tr.querySelector('td:nth-child(8) .p-bad');
+    const ok=(!t||t.split(/\s+/).every(w=>txt.includes(w))) && (ff==='todos'||(ff==='chamado'&&ch)||(ff==='pend'&&pe)||(ff==='dia'&&!pe&&!ch));
+    tr.style.display=ok?'':'none'; if(ok) n++; });
+  const el=document.getElementById('atv-n'); if(el) el.textContent = (t||ff!=='todos') ? `${n} de ${tot}` : `${tot} imóve${tot===1?'l':'is'}`;
+}
+document.addEventListener('input', e=>{ if(e.target.id==='atv-busca'){ S.atvBusca=e.target.value; filtrarAtivos(); } });
+document.addEventListener('click', e=>{ const b=e.target.closest('[data-atvfil]'); if(!b) return; e.stopImmediatePropagation(); S.atvFil=b.dataset.atvfil;
+  document.querySelectorAll('[data-atvfil]').forEach(x=>x.setAttribute('aria-pressed', x===b)); filtrarAtivos(); }, true);
+const renderAtv=render; render=function(){ renderAtv.apply(this,arguments); if(S.me && S.tab==='contratos') filtrarAtivos(); };
 
 
 /* contratos incluídos como já ativos não cobram documentos/dados da esteira */
@@ -504,7 +522,12 @@ const desocFalta = (c, et) => { const d=dsc(c)||{}, t=d.tarefas||{}; et = et===u
 function ativosSemDesoc(){
   const all=D.contratos; let h='';
   try{ D.contratos=all.filter(c=>!emDesoc(c) && !encerrado(c)); h=window.ativosHtml?window.ativosHtml():''; } finally { D.contratos=all; }
-  return h.replace('<p>Locações em vigor. Os clientes destes contratos usam o portal só para chamados.</p></div>','<p>Locações em vigor. Os clientes destes contratos usam o portal só para chamados.</p></div><button class="btn pri" data-dativo="1">+ Incluir contrato já ativo</button>')
+  const fb=S.atvBusca||'', ff=S.atvFil||'todos';
+  const filtro=`<div class="row" style="gap:8px;flex-wrap:wrap;margin:0 0 12px"><input id="atv-busca" type="search" value="${esc(fb)}" placeholder="🔎 Buscar por imóvel, inquilino, proprietário ou nº" autocomplete="off" style="flex:1 1 280px;min-width:0;border:1px solid var(--line);border-radius:10px;padding:9px 12px;background:var(--surface,#fff);font:inherit">
+    <div class="seg-b">${[['todos','Todos'],['chamado','🎫 Com chamado aberto'],['pend','⚠️ Com pendência'],['dia','✅ Em dia']].map(([k,v])=>`<button data-atvfil="${k}" aria-pressed="${ff===k}">${v}</button>`).join('')}</div><span class="muted" id="atv-n" style="font-size:12.5px"></span></div>`;
+  return h.replace('<h1>Contratos ativos</h1>','<h1>🏢 Imóveis ativos</h1>')
+    .replace('<p>Locações em vigor. Os clientes destes contratos usam o portal só para chamados.</p></div>','<p>Locações em vigor. Os clientes destes contratos usam o portal só para chamados.</p></div><button class="btn pri" data-dativo="1">+ Incluir contrato já ativo</button>')
+    .replace('<div class="tbl-wrap">', filtro+'<div class="tbl-wrap">')
     .replace(/<button class="btn sm" data-open="([^"]+)">Abrir<\/button>/g, (m,id)=>`<button class="btn sm ghost" data-desocini="${id}" title="Iniciar desocupação">🚚 Desocupar</button>`+m);
 }
 function desocCard(c){
