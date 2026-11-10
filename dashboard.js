@@ -58,7 +58,7 @@ function carteira(){
 function tempoChamados(){
   const desde=Date.now()-90*864e5, resp=[], resol=[]; let noSla=0, comResp=0;
   const acao=[];
-  D.chamados.forEach(h=>{
+  D.chamados.forEach(h=>{ if(h.interno) return;
     const ms=(D.msgs[h.id]||[]).slice().sort((a,b)=>new Date(a.created_at)-new Date(b.created_at));
     const ini=new Date(h.created_at).getTime(), lim=slaH(h.tipo);
     const r=ms.find(m=>m.autor==='equipe' && new Date(m.created_at)>=ini-1000);
