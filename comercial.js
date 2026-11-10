@@ -164,7 +164,7 @@ render = function(){
   /* captação: visitas e propostas agora ficam no comercial */
   const cc=document.getElementById('cap-comercial');
   if(cc && !cc.dataset.mov){ cc.dataset.mov='1'; const c=(D.captacoes||[]).find(k=>k.id===S.capOpen), vs=(D.visitas||[]).filter(v=>v.captacao_id===c?.id).length, ps=(D.propostas||[]).filter(p=>p.captacao_id===c?.id).length;
-    cc.innerHTML = `<h3>🤝 Visitas e propostas</h3><p class="muted" style="margin:0 0 8px;font-size:13px">Agora ficam na <b>esteira comercial</b> (aba Contratos) e na ficha do imóvel em Imóveis.${vs||ps?` Esta captação tem ${vs} visita(s) e ${ps} proposta(s) registradas.`:''}</p><button class="btn sm" data-tab="contratos" data-capclose="1">Ir para o comercial →</button>`; }
+    cc.innerHTML = `<h3>🤝 Visitas e propostas</h3><p class="muted" style="margin:0 0 8px;font-size:13px">Agora ficam na <b>esteira comercial</b> (aba Contratos) e na ficha do imóvel em Imóveis.${vs||ps?` Esta captação tem ${vs} visita(s) e ${ps} proposta(s) registradas.`:''}</p><button class="btn sm" data-tab="contratos" data-sec="comercial" data-capclose="1">Ir para o comercial →</button>`; }
   /* ficha do imóvel: negócios ligados */
   const fd=document.getElementById('imv-drawer');
   if(fd && S.imvOpen && !document.getElementById('imv-negs')){

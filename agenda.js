@@ -37,7 +37,20 @@ function agendaHtml(){
   const doDia = d => L.filter(a=>ymd(new Date(a.quando))===ymd(d)).sort((a,b)=>new Date(a.quando)-new Date(b.quando));
   const nHoje=L.filter(a=>!a.feito_em && ymd(new Date(a.quando))===hoje).length, n7=L.filter(a=>!a.feito_em && new Date(a.quando)>agora && new Date(a.quando)-agora<7*864e5).length;
   const pessoas=(D.equipe||[]).map(e=>e.nome);
-  return `<div class="head"><div><h1>📅 Agenda</h1><p>Follow-ups de chamados, comercial, financeiro e contratos. Cada pessoa vê a sua.</p></div><button class="btn pri" data-agnovo="1">+ Agendar</button></div>
+  const hr=new Date().getHours(), saud=hr<12?'Bom dia':hr<18?'Boa tarde':'Boa noite';
+  const chAb=D.chamados.filter(h=>h.status!=='resolvido' && !h.arquivado_em), pz=window.chPrazoDe, ue=window.chUteisEntre;
+  const chAtr=pz?chAb.filter(h=>ue(new Date(), pz(h))<0).length:0, chHoje=pz?chAb.filter(h=>ue(new Date(), pz(h))===0).length:0;
+  const ng=(D.negocios||[]).filter(n=>!n.arquivado_em && !['cliente','perdido'].includes(n.etapa)), ngFu=ng.filter(n=>n.proximo_contato && n.proximo_contato<=hoje).length, ngOpp=ng.filter(n=>n.etapa==='opp').length;
+  const ctAnd=D.contratos.filter(c=>c.etapa<6).length, capAnd=(D.captacoes||[]).filter(c=>c.etapa<5 && !c.arquivada_em).length;
+  const card=(ic,tit,big,sub,go,alerta)=>`<button class="card" data-navgo="${go}" style="text-align:left;${alerta?'border-color:var(--bad);box-shadow:inset 3px 0 0 var(--bad)':''}"><span class="code">${ic} ${tit}</span><div style="font-family:var(--f-display);font-size:28px;font-weight:700;line-height:1.1;${alerta?'color:var(--bad)':''}">${big}</div><div class="meta">${sub}</div></button>`;
+  return `<div class="head"><div><h1>🏠 ${saud}, ${esc(eu().split(' ')[0])}!</h1><p>${new Date().toLocaleDateString('pt-BR',{weekday:'long',day:'2-digit',month:'long'})} · o que pede atenção hoje</p></div><button class="btn pri" data-agnovo="1">+ Agendar</button></div>
+  <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:10px;margin-bottom:14px">
+    ${card('📅','Minha agenda', atrasados.length+nHoje, `${nHoje} hoje · ${atrasados.length} atrasado(s)`, 'agenda', atrasados.length>0)}
+    ${card('🎫','Chamados', chAtr+chHoje, `${chAtr} atrasado(s) · ${chHoje} vencem hoje · ${chAb.length} abertos`, 'contratos|chamados', chAtr>0)}
+    ${card('🤝','Comercial', ngFu, `follow-up(s) para hoje · ${ngOpp} oportunidade(s)`, 'contratos|comercial', false)}
+    ${card('📄','Em andamento', ctAnd+capAnd, `${ctAnd} contrato(s) · ${capAnd} captação(ões)`, 'contratos|contratos', false)}
+  </div>
+  <h2 style="font-size:16px;margin:6px 0 8px">📅 Agenda</h2>
   <div class="row" style="gap:8px;flex-wrap:wrap;margin:0 0 12px"><div class="seg-b">${[[eu(),'👤 Minha'],...pessoas.filter(p=>p!==eu()).map(p=>[p,p.split(' ')[0]]),['todos','Todos']].map(([k,v])=>`<button data-agpess="${esc(k)}" aria-pressed="${(S.agPess||eu())===k}">${esc(v)}</button>`).join('')}</div></div>
   <div class="stats">
     <div class="stat ${atrasados.length?'hl':''}"><b style="${atrasados.length?'color:var(--bad)':''}">${atrasados.length}</b><span>atrasados</span></div>

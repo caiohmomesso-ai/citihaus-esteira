@@ -27,6 +27,7 @@ function prazoPill(h){
   const [cl,t] = r<0 ? ['p-bad',`⏰ Atrasado ${-r} dia${r<-1?'s':''} útil${r<-1?'eis':''}`.replace('útileis','úteis')] : r===0 ? ['p-bad','⏰ Vence hoje'] : r===1 ? ['p-warn','Vence amanhã'] : ['p-mute',`Vence ${dCurta(pz)}`];
   return `<span class="pill ${cl}" title="Prazo: ${pz.toLocaleDateString('pt-BR')}">${t}</span>`;
 }
+window.chPrazoDe = h => prazoDe(h); window.chUteisEntre = (a,b) => uteisEntre(a,b);
 const priPill = h => { const p=PRI[h.prioridade]||PRI.normal; return `<span class="pill ${p.cl}">${p.ic} ${p.n}</span>`; };
 const ordemPrazo = (a,b) => prazoDe(a)-prazoDe(b) || PRI_K.indexOf(a.prioridade)-PRI_K.indexOf(b.prioridade);
 const ctNome = c => c ? `Contrato ${c.numero} · ${(D.imoveis.find(i=>i.id===c.imovel_id)||{}).titulo||''}` : '';

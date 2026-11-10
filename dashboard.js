@@ -442,10 +442,7 @@ render = function(){
   if(dr && c && c.prop_token && c.etapa<5 && !document.getElementById('cap-linkprop')){
     const ref=dr.querySelector('.d-body > .sec.box'); if(ref) ref.insertAdjacentHTML('beforebegin', boxLinkProp(c)); }
   if(S.tab==='mensagens') document.querySelectorAll('#app [data-msgdel]').forEach(b=>{ if(!b.previousElementSibling || !b.previousElementSibling.dataset.comwa) b.insertAdjacentHTML('beforebegin', `<button class="btn sm" data-comwa="${b.dataset.msgdel}" style="margin-right:6px">💬 WhatsApp</button>`); });
-  if(S.tab==='captacoes' && isAdm()){ const ib=document.querySelector('#app [data-capinteg]'); if(ib && !document.querySelector('#app [data-capdrive]')) ib.insertAdjacentHTML('beforebegin','<button class="btn" data-capdrive="1">📁 Google Drive</button>'); }
   if(dr && c && !document.getElementById('cap-comercial')){ const hs=[...dr.querySelectorAll('.d-body > .sec')].find(x=>(x.querySelector('h3')||{}).textContent==='Histórico'); if(hs) hs.insertAdjacentHTML('beforebegin', comercialHtml(c)); }
-  if(dr && c && !document.getElementById('cap-drive')){ const s2=dr.querySelector('#cap-s2'); const h3=s2&&s2.firstElementChild;
-    if(h3) h3.insertAdjacentHTML('afterend', `<div id="cap-drive" style="display:flex;gap:8px;align-items:center;background:var(--info-soft);border-radius:10px;padding:8px 12px;margin-bottom:10px;font-size:12.5px">📁 <span>Pasta no Drive: <b>Citihaus · Captações / ${esc(capNome(c))}</b>. As fotos que entrarem lá aparecem aqui sozinhas.</span></div>`); }
   prepararArrastar();
   if(S.dModal) layer.insertAdjacentHTML('beforeend', dModalHtml());
 };
