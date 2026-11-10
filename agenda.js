@@ -20,20 +20,34 @@ function refInfo(a){
   if(a.ref_tipo==='imovel'){ const i=D.imoveis.find(x=>x.id===a.ref_id); return i && {t:'🏠 '+i.titulo, attr:`data-imvopen="${i.id}"`}; }
   return null;
 }
+const COR_T = {'Follow-up':'var(--accent)','Chamado':'var(--warn)','Comercial':'var(--ok)','Visita':'var(--info)','Financeiro':'#8a5cf6','Contrato':'var(--info)','Captação':'var(--accent)','Reunião':'var(--muted)','Outro':'var(--muted)'};
+function refCurta(a){ const r=refInfo(a); if(!r) return null;
+  if(a.ref_tipo==='chamado'){ const m=r.t.match(/(\d+)$/); return {t:'🎫 Chamado '+(m?m[1]:''), attr:r.attr}; }
+  return {t:r.t.length>26?r.t.slice(0,25)+'…':r.t, attr:r.attr}; }
+const titCurto = t => String(t||'').replace(/^Follow-up do chamado PROT-[\d-]+\s*·\s*/,'Retorno: ');
 function item(a, compacto){
-  const r=refInfo(a), atras=!a.feito_em && new Date(a.quando)<new Date();
-  return `<div style="display:flex;gap:8px;align-items:flex-start;padding:8px 10px;border:1px solid ${atras?'var(--bad)':'var(--line)'};border-radius:10px;background:${a.feito_em?'var(--bg)':'var(--surface,#fff)'};margin-bottom:6px;${a.feito_em?'opacity:.6':''}">
-    <button type="button" data-agok="${a.id}" title="${a.feito_em?'Reabrir':'Concluir'}" aria-label="${a.feito_em?'Reabrir':'Concluir'}" style="flex:none;width:22px;height:22px;border-radius:50%;border:2px solid ${a.feito_em?'var(--ok)':'var(--line)'};background:${a.feito_em?'var(--ok)':'transparent'};color:#fff;font-size:12px;cursor:pointer;padding:0;line-height:18px">${a.feito_em?'✓':''}</button>
+  const r=compacto?refCurta(a):refInfo(a), atras=!a.feito_em && new Date(a.quando)<new Date(), cor=COR_T[a.tipo]||'var(--muted)';
+  const check=`<button type="button" data-agok="${a.id}" title="${a.feito_em?'Reabrir':'Concluir'}" aria-label="${a.feito_em?'Reabrir':'Concluir'}" style="flex:none;width:18px;height:18px;border-radius:50%;border:2px solid ${a.feito_em?'var(--ok)':'var(--line)'};background:${a.feito_em?'var(--ok)':'var(--surface,#fff)'};color:#fff;font-size:10px;cursor:pointer;padding:0;line-height:14px">${a.feito_em?'✓':''}</button>`;
+  const quando = compacto ? hm(a.quando) : new Date(a.quando).toLocaleString('pt-BR',{weekday:'short',day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'});
+  if(compacto) return `<div style="position:relative;padding:7px 8px 7px 11px;border:1px solid ${atras?'var(--bad)':'var(--line)'};border-radius:9px;background:${a.feito_em?'transparent':'var(--surface,#fff)'};margin-bottom:6px;${a.feito_em?'opacity:.55':''}" title="${esc(a.titulo)}">
+    <i style="position:absolute;left:0;top:6px;bottom:6px;width:3px;border-radius:0 3px 3px 0;background:${cor}"></i>
+    <div style="display:flex;gap:6px;align-items:center;margin-bottom:3px">${check}<b style="font-size:12px;${atras?'color:var(--bad)':''}">${quando}</b><span class="muted" style="font-size:11px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${icT(a.tipo)} ${esc(a.tipo)}${S.agPess==='todos'?' · '+esc(a.responsavel.split(' ')[0]):''}</span></div>
+    <button type="button" data-agedit="${a.id}" style="all:unset;cursor:pointer;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;font-weight:600;font-size:12.5px;line-height:1.3;${a.feito_em?'text-decoration:line-through':''}">${esc(titCurto(a.titulo))}</button>
+    ${r?`<button type="button" ${r.attr} style="all:unset;cursor:pointer;display:block;margin-top:4px;font-size:11px;color:var(--accent-ink);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(r.t)} →</button>`:''}</div>`;
+  return `<div style="display:flex;gap:10px;align-items:center;padding:8px 10px 8px 12px;position:relative;border:1px solid ${atras?'var(--bad)':'var(--line)'};border-radius:10px;background:${a.feito_em?'transparent':'var(--surface,#fff)'};margin-bottom:6px;${a.feito_em?'opacity:.6':''}">
+    <i style="position:absolute;left:0;top:7px;bottom:7px;width:3px;border-radius:0 3px 3px 0;background:${cor}"></i>${check}
     <button type="button" data-agedit="${a.id}" style="all:unset;cursor:pointer;flex:1;min-width:0">
-      <div style="font-size:12px;${atras?'color:var(--bad);font-weight:700':''}" class="${atras?'':'muted'}">${compacto?hm(a.quando):new Date(a.quando).toLocaleString('pt-BR',{weekday:'short',day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'})} · ${icT(a.tipo)} ${esc(a.tipo)}${(S.agPess==='todos')?' · '+esc(a.responsavel):''}</div>
-      <div style="font-weight:600;font-size:13.5px;${a.feito_em?'text-decoration:line-through':''}">${esc(a.titulo)}</div></button>
-    ${r?`<button type="button" class="btn sm ghost" ${r.attr} style="flex:none;font-size:11.5px;padding:3px 8px">${esc(r.t)}</button>`:''}</div>`;
+      <div style="font-size:11.5px;${atras?'color:var(--bad);font-weight:700':''}" class="${atras?'':'muted'}">${quando} · ${icT(a.tipo)} ${esc(a.tipo)}${S.agPess==='todos'?' · '+esc(a.responsavel):''}</div>
+      <div style="font-weight:600;font-size:13.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;${a.feito_em?'text-decoration:line-through':''}">${esc(titCurto(a.titulo))}</div></button>
+    ${r?`<button type="button" class="btn sm ghost" ${r.attr} style="flex:none;font-size:11.5px;padding:3px 8px;max-width:40%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(r.t)}</button>`:''}</div>`;
 }
 
 function agendaHtml(){
   const L=D.agenda.filter(doFiltro), agora=new Date(), hoje=ymd(agora);
   const atrasados=L.filter(a=>!a.feito_em && new Date(a.quando)<agora && ymd(new Date(a.quando))<hoje).sort((a,b)=>new Date(a.quando)-new Date(b.quando));
   const ini=segunda(new Date(Date.now()+(S.agSem||0)*7*864e5)), diasW=[...Array(7)].map((_,k)=>{ const d=new Date(ini); d.setDate(d.getDate()+k); return d; });
+  const doDia0 = d => L.filter(a=>ymd(new Date(a.quando))===ymd(d));
+  const diasV = diasW.filter(d=>(d.getDay()!==0&&d.getDay()!==6) || doDia0(d).length || ymd(d)===hoje);
   const doDia = d => L.filter(a=>ymd(new Date(a.quando))===ymd(d)).sort((a,b)=>new Date(a.quando)-new Date(b.quando));
   const nHoje=L.filter(a=>!a.feito_em && ymd(new Date(a.quando))===hoje).length, n7=L.filter(a=>!a.feito_em && new Date(a.quando)>agora && new Date(a.quando)-agora<7*864e5).length;
   const pessoas=(D.equipe||[]).map(e=>e.nome);
@@ -58,7 +72,7 @@ function agendaHtml(){
   ${atrasados.length?`<div class="box" style="margin-top:12px;border-color:var(--bad)"><h2 style="color:var(--bad)">⏰ Atrasados (${atrasados.length})</h2>${atrasados.map(a=>item(a,false)).join('')}</div>`:''}
   <div class="row between" style="margin:16px 0 8px;gap:8px;flex-wrap:wrap"><h2 style="font-size:16px;margin:0">Semana de ${ini.toLocaleDateString('pt-BR',{day:'2-digit',month:'2-digit'})} a ${diasW[6].toLocaleDateString('pt-BR',{day:'2-digit',month:'2-digit'})}</h2>
     <div class="row" style="gap:6px"><button class="btn sm" data-agsem="-1">← Anterior</button><button class="btn sm ${S.agSem?'':'pri'}" data-agsem="0">Esta semana</button><button class="btn sm" data-agsem="1">Próxima →</button></div></div>
-  <div class="board-scroll"><div class="board" style="grid-auto-columns:minmax(190px,1fr)">${diasW.map(d=>{ const its=doDia(d), eh=ymd(d)===hoje;
+  <div class="board-scroll"><div class="board" style="grid-auto-columns:minmax(170px,1fr)">${diasV.map(d=>{ const its=doDia(d), eh=ymd(d)===hoje;
     return `<section class="col" style="min-height:0;padding:8px;${eh?'outline:2px solid var(--accent);outline-offset:-2px':''}"><div class="col-h" style="margin-bottom:6px"><div><h3>${DS[d.getDay()]} ${d.toLocaleDateString('pt-BR',{day:'2-digit',month:'2-digit'})}${eh?' · hoje':''}</h3><small>${its.filter(a=>!a.feito_em).length} pendente(s)</small></div><button class="btn sm ghost" data-agnovo="1" data-agdia="${ymd(d)}" title="Agendar neste dia" style="padding:2px 8px">+</button></div>
       ${its.length?its.map(a=>item(a,true)).join(''):'<div class="muted" style="font-size:12px;text-align:center;padding:6px 0">—</div>'}</section>`; }).join('')}</div></div>`;
 }
@@ -124,11 +138,11 @@ render = function(){
   }
   /* gavetas: chamado, negócio, contrato */
   const ch=document.querySelector('aside.drawer[aria-label^="Chamado "]'), h=S.chTeam && D.chamados.find(x=>x.id===S.chTeam);
-  if(ch && h && !ch.querySelector('#ag-ref')){ const s=ch.querySelector('.d-body > .sec'); if(s) s.insertAdjacentHTML('afterend', boxRef('chamado', h.id, 'Follow-up do chamado '+h.protocolo+' · '+h.titulo)); }
+  if(ch && h && !ch.querySelector('#ag-ref')){ const s=ch.querySelector('.d-body > .sec'); if(s) s.insertAdjacentHTML('afterend', boxRef('chamado', h.id, 'Retorno: '+String(h.titulo).split(' · ').slice(0,2).join(' · ').slice(0,60))); }
   const nd=document.getElementById('neg-drawer'), n=S.negOpen && (D.negocios||[]).find(x=>x.id===S.negOpen);
   if(nd && n && !nd.querySelector('#ag-ref')){ const s=nd.querySelector('.d-body .sec.box'); if(s) s.insertAdjacentHTML('beforebegin', boxRef('negocio', n.id, 'Retornar para '+n.nome)); }
   const cd=document.querySelector('aside.drawer[aria-label^="Contrato "]'), c=S.open && D.contratos.find(x=>x.id===S.open);
-  if(cd && c && !cd.querySelector('#ag-ref')){ const b=cd.querySelector('.d-body'); if(b) b.insertAdjacentHTML('afterbegin', boxRef('contrato', c.id, 'Contrato '+c.numero+' · ')); }
+  if(cd && c && !cd.querySelector('#ag-ref')){ const b=cd.querySelector('.d-body'); if(b) b.insertAdjacentHTML('afterbegin', boxRef('contrato', c.id, 'Contrato '+c.numero+': ')); }
   if(S.modal && S.modal.tipo==='agenda') avisoHora();
 };
 
