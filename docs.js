@@ -50,14 +50,17 @@ function docsHtml(){
     </div>
     <div class="muted" style="font-size:12px;margin:12px 0 6px">3. Confira a mensagem <span style="font-weight:500">(pode editar à vontade)</span></div>
     <textarea id="com-x" rows="12" placeholder="Escolha um modelo acima ou escreva aqui" style="width:100%;box-sizing:border-box;border:1px solid var(--line);border-radius:12px;padding:10px 12px;background:var(--bg);font:inherit;font-size:14px;line-height:1.45">${esc(texto)}</textarea>
-    <div class="row" style="gap:8px;flex-wrap:wrap;margin-top:10px">
-      <button class="btn pri" data-comwa="1" style="background:#25D366;border-color:#25D366">💬 Abrir no WhatsApp</button>
-      <button class="btn" data-commail="1">✉️ Abrir no e-mail</button>
-      <button class="btn ghost" data-comcopy="1">📋 Copiar</button>
+    <div class="muted" style="font-size:12px;margin:12px 0 6px">4. Anexos <span style="font-weight:500">(vão junto com o PDF)</span></div>
+    ${D.docMod.length?`<div style="display:grid;gap:4px;max-height:150px;overflow:auto;border:1px solid var(--line);border-radius:10px;padding:8px 10px">${D.docMod.map(d=>`<label style="display:flex;gap:8px;align-items:center;font-size:13px;cursor:pointer"><input type="checkbox" data-cxanexo="${d.id}" ${(c.anexos||[]).includes(d.id)?'checked':''} style="accent-color:var(--accent)"> ${CAT_IC[d.categoria]||'📎'} ${esc(d.titulo)} <span class="muted" style="font-size:11px">${esc(ext(d.nome_arquivo))}</span></label>`).join('')}</div>`:'<div class="muted" style="font-size:12.5px">Nenhum modelo enviado ainda.</div>'}
+    <div class="row" style="gap:8px;flex-wrap:wrap;margin-top:12px">
+      <button class="btn pri" data-cxwa="1" style="background:#25D366;border-color:#25D366">💬 Enviar no WhatsApp</button>
+      <button class="btn" data-cxmail="1">✉️ Enviar por e-mail</button>
+      <button class="btn ghost" data-cxpdf="1">⬇ Baixar PDF</button>
+      <button class="btn ghost" data-cxcopy="1">📋 Copiar texto</button>
       <span style="flex:1"></span>
       <button class="btn sm ghost" data-comsalvar="1">💾 Salvar como modelo</button>${m&&adm()?`<button class="btn sm ghost" style="color:var(--bad)" data-comdel="${m.id}">${S.comDel===m.id?'Confirmar':'🗑 Modelo'}</button>`:''}
     </div>
-    <p class="muted" style="font-size:12px;margin:10px 0 0">Para mandar um documento junto: baixe o modelo ao lado e anexe na conversa que abrir. Os campos {nome}, {imovel}, {corretor} e {data} são preenchidos sozinhos.</p>
+    <p class="muted" style="font-size:12px;margin:10px 0 0">O comunicado vira um <b>PDF com a marca da Citihaus</b>. No celular, o WhatsApp abre já com o PDF e os anexos. No computador, os arquivos são baixados e a conversa abre: é só arrastar os arquivos para ela. Os campos {nome}, {imovel}, {corretor} e {data} são preenchidos sozinhos.</p>
   </div></div>`;
 }
 
@@ -83,6 +86,37 @@ function lerCampos(){ const c=C(), g=id=>{ const x=document.getElementById(id); 
   ['nome:com-n','tel:com-t','email:com-e','imv:com-i','data:com-d','texto:com-x'].forEach(p=>{ const [k,id]=p.split(':'); const v=g(id); if(v!==undefined) c[k]=v; }); return c; }
 function refazTexto(){ const c=C(), m=c.mod && D.comMod.find(x=>x.id===c.mod); if(!m) return; c.texto=preencher(m.texto); const x=document.getElementById('com-x'); if(x) x.value=c.texto; }
 const soNum = t => String(t||'').replace(/\D/g,'');
+document.addEventListener('change', e=>{ const id=e.target.dataset && e.target.dataset.cxanexo; if(!id) return; const c=C(); c.anexos=c.anexos||[]; c.anexos = e.target.checked ? [...new Set([...c.anexos,id])] : c.anexos.filter(x=>x!==id); });
+const assuntoDe = c => { const m=c.mod && D.comMod.find(x=>x.id===c.mod); return (m&&m.assunto) || 'Comunicado Citihaus'; };
+const podeCompartilhar = fs => { try{ return !!(navigator.canShare && navigator.share && (!fs || navigator.canShare({files:fs}))); }catch(_){ return false; } };
+function salvar(f){ const a=document.createElement('a'); a.href=URL.createObjectURL(f); a.download=f.name; document.body.appendChild(a); a.click(); setTimeout(()=>{ URL.revokeObjectURL(a.href); a.remove(); }, 4000); }
+async function baixarAnexos(ids){ const out=[]; for(const id of ids){ const d=D.docMod.find(x=>x.id===id); if(!d) continue; const r=await sb.storage.from('modelos').download(d.path); if(r.error) throw r.error; out.push(new File([r.data], d.nome_arquivo||d.titulo, {type:d.mime||r.data.type||'application/octet-stream'})); } return out; }
+let jsPdfP=null;
+const carregaJsPDF = () => jsPdfP || (jsPdfP = new Promise((ok,nok)=>{ if(window.jspdf) return ok(window.jspdf); const sc=document.createElement('script'); sc.src='https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js'; sc.onload=()=>ok(window.jspdf); sc.onerror=()=>{ jsPdfP=null; nok(new Error('Não foi possível carregar o gerador de PDF')); }; document.head.appendChild(sc); }));
+const latin = t => String(t||'').replace(/[‘’]/g,"'").replace(/[“”]/g,'"').replace(/[–—]/g,'-').replace(/[^\x00-\xFF•]/gu,'').replace(/[ \t]+\n/g,'\n');
+async function gerarPDF(c, texto){
+  const {jsPDF}=await carregaJsPDF(); const doc=new jsPDF({unit:'mm', format:'a4'}); const W=210, H=297, M=20;
+  const laranja=[232,93,36], escuro=[184,65,15];
+  doc.setFillColor(...laranja); doc.rect(0,0,W,30,'F'); doc.setFillColor(233,146,32); doc.rect(0,30,W,1.4,'F');
+  doc.setTextColor(255,255,255); doc.setFont('helvetica','bold'); doc.setFontSize(24); doc.text('Citihaus', M, 19);
+  doc.setFont('helvetica','normal'); doc.setFontSize(9.5); doc.text('Negócios Imobiliários', M+44, 19);
+  doc.setFontSize(9); doc.text(new Date().toLocaleDateString('pt-BR',{day:'2-digit',month:'long',year:'numeric'}), W-M, 19, {align:'right'});
+  let y=46; doc.setTextColor(...escuro); doc.setFont('helvetica','bold'); doc.setFontSize(15); doc.text(latin(assuntoDe(c)), M, y); y+=8;
+  const im=c.imv && D.imoveis.find(i=>i.id===c.imv);
+  doc.setFont('helvetica','normal'); doc.setFontSize(10); doc.setTextColor(110,110,110);
+  if(c.nome){ doc.text(latin('Para: '+c.nome), M, y); y+=5; } if(im){ doc.text(latin('Imóvel: '+im.titulo), M, y); y+=5; }
+  y+=4; doc.setDrawColor(235,225,215); doc.line(M,y,W-M,y); y+=9;
+  doc.setTextColor(40,40,40); doc.setFontSize(11.5);
+  const linhas=doc.splitTextToSize(latin(texto), W-2*M);
+  linhas.forEach(l=>{ if(y>H-28){ rodape(doc,W,H,M); doc.addPage(); y=24; doc.setTextColor(40,40,40); doc.setFontSize(11.5); doc.setFont('helvetica','normal'); }
+    const bullet=/^\s*•/.test(l); doc.setFont('helvetica', bullet?'normal':'normal'); doc.text(l, M+(bullet?2:0), y); y+=6.2; });
+  y+=6; doc.setFont('helvetica','bold'); doc.setTextColor(...escuro); doc.text(latin(S.me.nome), M, y); doc.setFont('helvetica','normal'); doc.setTextColor(110,110,110); doc.setFontSize(10); doc.text('Citihaus Negócios Imobiliários', M, y+5);
+  const total=doc.getNumberOfPages(); for(let k=1;k<=total;k++){ doc.setPage(k); rodape(doc,W,H,M); }
+  const nomeArq=(assuntoDe(c)+(c.nome?' - '+c.nome.split(' ')[0]:'')).normalize('NFD').replace(/[̀-ͯ]/g,'').replace(/[^\w -]+/g,'').trim()+'.pdf';
+  return new File([doc.output('blob')], nomeArq, {type:'application/pdf'});
+}
+function rodape(doc,W,H,M){ doc.setDrawColor(232,93,36); doc.setLineWidth(.6); doc.line(M,H-16,W-M,H-16); doc.setFontSize(8.5); doc.setTextColor(120,120,120); doc.setFont('helvetica','normal');
+  doc.text('Citihaus Imobiliária  ·  CRECI 047221-J  ·  WhatsApp (17) 93634-8613', W/2, H-10, {align:'center'}); }
 
 document.addEventListener('input', e=>{
   if(S.tab!=='docs') return; const id=e.target.id;
@@ -104,10 +138,23 @@ document.addEventListener('click', e=>{
   if(d.docdel){ e.stopImmediatePropagation(); if(S.docDel!==d.docdel){ S.docDel=d.docdel; return render(); } const doc=D.docMod.find(x=>x.id===d.docdel);
     return acao(async()=>{ await sb.storage.from('modelos').remove([doc.path]); await q(sb.from('doc_modelos').delete().eq('id',doc.id)); S.docDel=null; }, 'Modelo removido'); }
   if(d.commod){ e.stopImmediatePropagation(); lerCampos(); const c=C(); c.mod=d.commod; c.editado=false; c.texto=''; const m=D.comMod.find(x=>x.id===c.mod); c.assunto=m&&m.assunto||''; render(); refazTexto(); return; }
-  if(d.comwa||d.commail||d.comcopy){ e.stopImmediatePropagation(); const c=lerCampos(), t=(c.texto||'').trim(); if(!t) return toast('Escolha um modelo ou escreva a mensagem');
-    if(d.comcopy) return copiar(t);
-    if(d.comwa){ const n=soNum(c.tel); const tel = n ? (n.length<=11 ? '55'+n : n) : ''; window.open('https://wa.me/'+tel+'?text='+encodeURIComponent(t),'_blank','noopener'); if(!n) toast('Sem celular: escolha o contato no WhatsApp'); return; }
-    if(d.commail){ const m=c.mod && D.comMod.find(x=>x.id===c.mod); location.href='mailto:'+encodeURIComponent(c.email||'')+'?subject='+encodeURIComponent((m&&m.assunto)||'Citihaus')+'&body='+encodeURIComponent(t); if(!c.email) toast('Sem e-mail: preencha o destinatário no e-mail que abriu'); return; } }
+  if(d.cxwa||d.cxmail||d.cxcopy||d.cxpdf){ e.stopImmediatePropagation(); const c=lerCampos(), t=(c.texto||'').trim(); if(!t) return toast('Escolha um modelo ou escreva a mensagem');
+    if(d.cxcopy) return copiar(t);
+    const canal = d.cxwa ? 'wa' : d.cxmail ? 'mail' : 'pdf';
+    const n=soNum(c.tel), tel = n ? (n.length<=11 ? '55'+n : n) : '';
+    /* abre a janela já no clique (navegador bloqueia janela aberta depois de esperar) */
+    const jan = canal==='wa' && !podeCompartilhar() ? window.open('about:blank','_blank') : null;
+    b.disabled=true; const txtBtn=b.textContent; b.textContent='Gerando PDF…';
+    (async()=>{ try{
+      const arquivos=[await gerarPDF(c,t), ...await baixarAnexos(c.anexos||[])];
+      const curto=`Olá${c.nome?', '+c.nome.split(' ')[0]:''}! Segue em anexo ${arquivos.length>1?'os documentos':'o documento'} da Citihaus 🧡`;
+      if(canal==='pdf'){ arquivos.forEach(salvar); toast(arquivos.length>1?arquivos.length+' arquivos baixados':'PDF baixado'); return; }
+      if(podeCompartilhar(arquivos)){ try{ await navigator.share({files:arquivos, title:assuntoDe(c), text:curto}); toast('Enviado ✓'); return; }catch(err){ if(err && err.name==='AbortError') return; } }
+      arquivos.forEach(salvar);
+      if(canal==='wa'){ const url='https://wa.me/'+tel+'?text='+encodeURIComponent(curto); if(jan) jan.location.href=url; else window.open(url,'_blank'); toast('Arquivos baixados: arraste para a conversa do WhatsApp'); }
+      else { location.href='mailto:'+encodeURIComponent(c.email||'')+'?subject='+encodeURIComponent(assuntoDe(c))+'&body='+encodeURIComponent(curto+'\n\n'+t); toast('Arquivos baixados: anexe no e-mail que abriu'); }
+    }catch(err){ if(jan) jan.close(); falha(err); } finally{ b.disabled=false; b.textContent=txtBtn; } })(); return; }
+  if(d.cxanexo!==undefined){ return; }
   if(d.comsalvar){ e.stopImmediatePropagation(); lerCampos(); S.modal={tipo:'comsalvar'}; return render(); }
   if(d.comdel){ e.stopImmediatePropagation(); if(S.comDel!==d.comdel){ S.comDel=d.comdel; return render(); }
     return acao(async()=>{ await q(sb.from('com_modelos').delete().eq('id',d.comdel)); C().mod=null; S.comDel=null; }, 'Modelo de comunicado removido'); }

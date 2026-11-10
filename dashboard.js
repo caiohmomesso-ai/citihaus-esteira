@@ -119,85 +119,101 @@ function graficoAno(){
 }
 
 /* ---------- aba Dashboard ---------- */
+/* ---------- gráficos (SVG leve, sem bibliotecas) ---------- */
+function donut(seg, centro, sub){ const tot=seg.reduce((s,x)=>s+x.v,0)||1, R=42, C=2*Math.PI*R; let ac=0;
+  return `<div style="display:flex;gap:14px;align-items:center;flex-wrap:wrap"><svg viewBox="0 0 110 110" width="110" height="110" role="img" aria-label="${esc(seg.map(x=>x.n+': '+x.v).join(', '))}">
+    <circle cx="55" cy="55" r="${R}" fill="none" stroke="var(--surface-2)" stroke-width="13"/>
+    ${seg.filter(x=>x.v>0).map(x=>{ const l=x.v/tot*C, o=`<circle cx="55" cy="55" r="${R}" fill="none" stroke="${x.c}" stroke-width="13" stroke-dasharray="${l} ${C-l}" stroke-dashoffset="${-ac}" transform="rotate(-90 55 55)"/>`; ac+=l; return o; }).join('')}
+    <text x="55" y="53" text-anchor="middle" style="font:700 19px var(--f-display);fill:var(--fg)">${centro}</text><text x="55" y="69" text-anchor="middle" style="font:500 9.5px system-ui;fill:var(--muted)">${sub||''}</text></svg>
+    <div style="display:grid;gap:5px;font-size:12.5px">${seg.map(x=>`<div style="display:flex;gap:6px;align-items:center"><i style="width:10px;height:10px;border-radius:3px;background:${x.c};display:inline-block"></i>${esc(x.n)} <b style="margin-left:auto;padding-left:10px">${x.f?x.f(x.v):x.v}</b></div>`).join('')}</div></div>`; }
+function anel(feito, alvo, rot, fmt){ const p=alvo?Math.min(1,feito/alvo):0, R=30, C=2*Math.PI*R, ok=alvo&&feito>=alvo;
+  return `<div style="text-align:center;min-width:0"><svg viewBox="0 0 80 80" width="80" height="80" role="img" aria-label="${esc(rot)}: ${fmt(feito)}${alvo?' de '+fmt(alvo):''}">
+    <circle cx="40" cy="40" r="${R}" fill="none" stroke="var(--surface-2)" stroke-width="8"/>
+    <circle cx="40" cy="40" r="${R}" fill="none" stroke="${ok?'var(--ok)':'var(--accent)'}" stroke-width="8" stroke-linecap="round" stroke-dasharray="${p*C} ${C}" transform="rotate(-90 40 40)"/>
+    <text x="40" y="44" text-anchor="middle" style="font:700 14px var(--f-display);fill:var(--fg)">${alvo?Math.round(p*100)+'%':'—'}</text></svg>
+    <div style="font-size:12px;font-weight:700">${esc(rot)}</div><div class="muted" style="font-size:11.5px">${fmt(feito)}${alvo?' de '+fmt(alvo):' · sem meta'}</div></div>`; }
+function barrasAno(){ const A=S.dAno;
+  const vals=MESES.map((_,i)=>D.vendas.filter(v=>noMes(v.data,A,i+1)).reduce((s,v)=>s+Number(v.valor),0)), metas=MESES.map((_,i)=>meta('vendas_valor',i+1));
+  const caps=MESES.map((_,i)=>(D.captacoes||[]).filter(c=>noMes(c.created_at,A,i+1)).length), mx=Math.max(1,...vals,...metas), mxc=Math.max(1,...caps);
+  const W=600, H=170, pb=22, cw=W/12, y=v=>H-pb-(v/mx)*(H-pb-14);
+  const linhaMeta=metas.map((m,i)=>m?`<line x1="${i*cw+cw*.12}" x2="${i*cw+cw*.88}" y1="${y(m)}" y2="${y(m)}" stroke="var(--fg)" stroke-width="2" stroke-dasharray="3 3" opacity=".55"><title>Meta ${MESES[i]}: ${kBRL(m)}</title></line>`:'').join('');
+  return `<svg viewBox="0 0 ${W} ${H}" width="100%" style="display:block" role="img" aria-label="Vendas por mês em ${A}">
+    ${vals.map((v,i)=>{ const h=H-pb-y(v), at=i+1===S.dMes; return `<g><title>${MESES[i]}: ${kBRL(v)}${metas[i]?' · meta '+kBRL(metas[i]):''} · ${caps[i]} captação(ões)</title>
+      <rect x="${i*cw+cw*.2}" y="${y(v)}" width="${cw*.6}" height="${Math.max(v?3:0,h)}" rx="4" fill="${at?'var(--accent)':'color-mix(in srgb, var(--accent) 45%, transparent)'}"/>
+      ${v?`<text x="${i*cw+cw/2}" y="${y(v)-4}" text-anchor="middle" style="font:600 9.5px system-ui;fill:var(--muted)">${kBRL(v).replace('R$ ','')}</text>`:''}
+      <text x="${i*cw+cw/2}" y="${H-6}" text-anchor="middle" style="font:${at?700:500} 10.5px system-ui;fill:${at?'var(--fg)':'var(--muted)'}">${MESES[i]}</text></g>`; }).join('')}
+    ${linhaMeta}</svg>
+    <div class="row" style="gap:14px;font-size:11.5px;color:var(--muted);margin-top:4px"><span><i style="display:inline-block;width:10px;height:10px;border-radius:3px;background:var(--accent);vertical-align:-1px"></i> Vendas (R$)</span>${metas.some(Boolean)?'<span>┄ Meta</span>':''}<span>🏠 ${caps.reduce((a,b)=>a+b,0)} captações no ano</span></div>`; }
+function barrasH(itens, fmt){ const mx=Math.max(1,...itens.map(x=>x.v));
+  return itens.map(x=>`<div style="display:grid;grid-template-columns:118px 1fr auto;gap:8px;align-items:center;font-size:12.5px;margin-bottom:7px"><span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${x.n}</span>
+    <div style="height:12px;border-radius:99px;background:var(--surface-2);overflow:hidden"><i style="display:block;height:100%;width:${x.v?Math.max(3,Math.round(x.v/mx*100)):0}%;background:${x.c||'var(--accent)'};border-radius:99px"></i></div><b>${fmt?fmt(x.v):x.v}</b></div>`).join(''); }
+
 function dashHtml(){
   const A=S.dAno, M=S.dMes, cart=carteira(), tc=tempoChamados(), tk=tempoContratos();
   const vMes=D.vendas.filter(v=>noMes(v.data,A,M)), vAno=D.vendas.filter(v=>noMes(v.data,A));
   const capMes=(D.captacoes||[]).filter(c=>noMes(c.created_at,A,M)), locMes=D.contratos.filter(c=>!(c.situacao||{}).importado && noMes(c.created_at,A,M));
   const soma=l=>l.reduce((s,v)=>s+Number(v.valor),0);
-  const cors=corretores();
-  const rank=cors.map(n=>({n, cap:capMes.filter(c=>c.corretor===n).length, meta:meta('captacoes',M,n), vend:soma(vMes.filter(v=>v.corretor===n))})).filter(r=>r.cap||r.meta||r.vend).sort((a,b)=>b.cap-a.cap||b.vend-a.vend);
-  const mxCap=Math.max(1,...rank.map(r=>Math.max(r.cap,r.meta)));
-  const ETN=ETAPAS.slice(0,6), mxEt=Math.max(1,...tk.etapas.map(x=>x||0));
   const selAno=[A-1,A,A+1].map(y=>`<option ${y===A?'selected':''}>${y}</option>`).join('');
-  return `<div class="head"><div><h1>Dashboard</h1><p>Carteira, metas e tempos de atendimento da Citihaus em ${MESES_L[M-1]} de ${A}.</p></div>
-    <div class="row" style="gap:8px"><select id="d-mes" style="border:1px solid var(--line);border-radius:9px;padding:7px 10px;background:var(--surface)">${MESES_L.map((m,i)=>`<option value="${i+1}" ${i+1===M?'selected':''}>${m[0].toUpperCase()+m.slice(1)}</option>`).join('')}</select>
-    <select id="d-ano" style="border:1px solid var(--line);border-radius:9px;padding:7px 10px;background:var(--surface)">${selAno}</select>
-    ${isAdm()?'<button class="btn" data-dmetas="1">🎯 Definir metas</button>':''}<button class="btn pri" data-dvenda="1">+ Registrar venda</button></div></div>
+  const sel='border:1px solid var(--line);border-radius:9px;padding:7px 10px;background:var(--surface)';
+  /* carteira de imóveis */
+  const ativos=D.contratos.filter(c=>c.etapa===6 && !encerrado(c)).length, andamento=D.contratos.filter(c=>c.etapa<6).length;
+  const disp=D.imoveis.filter(i=>i.status==='Disponível').length, desoc=D.contratos.filter(c=>{ const d=(c.situacao||{}).desocupacao; return d && d.etapa<4; }).length;
+  /* chamados */
+  const chAb=D.chamados.filter(h=>h.status!=='resolvido' && !h.arquivado_em), pz=window.chPrazoDe, ue=window.chUteisEntre;
+  const chAtr=pz?chAb.filter(h=>ue(new Date(),pz(h))<0).length:0, chHoje=pz?chAb.filter(h=>ue(new Date(),pz(h))===0).length:0;
+  /* funil comercial */
+  const NG=(D.negocios||[]).filter(n=>!n.arquivado_em), fun=[['lead','📥 Lead'],['mql','🎯 MQL'],['sal','🤝 SAL'],['opp','🔥 Oportunidade'],['cliente','🏆 Cliente']];
+  const ordemF=['lead','mql','sal','opp','cliente'], ate=k=>NG.filter(n=>ordemF.indexOf(n.etapa)>=ordemF.indexOf(k)).length;
+  const kp=(ic,val,rot,sub,cor)=>`<div class="stat" style="padding:12px 14px"><span style="font-size:12px;font-weight:700;color:var(--muted)">${ic} ${rot}</span><b style="font-size:24px;${cor?'color:'+cor:''}">${val}</b>${sub?`<div style="font-size:11.5px;color:var(--muted)">${sub}</div>`:''}</div>`;
+  return `<div class="head"><div><h1>📊 Dashboard</h1><p>${MESES_L[M-1][0].toUpperCase()+MESES_L[M-1].slice(1)} de ${A} · resumo da Citihaus</p></div>
+    <div class="row" style="gap:8px;flex-wrap:wrap"><select id="d-mes" style="${sel}">${MESES_L.map((m,i)=>`<option value="${i+1}" ${i+1===M?'selected':''}>${m[0].toUpperCase()+m.slice(1)}</option>`).join('')}</select>
+    <select id="d-ano" style="${sel}">${selAno}</select>${isAdm()?'<button class="btn" data-dmetas="1">🎯 Metas</button>':''}<button class="btn pri" data-dvenda="1">+ Venda</button></div></div>
 
-  <div class="stats">
-    ${kpi('🏷️', kBRL(cart.vgv), 'VGV disponível (venda)', `${cart.nVgv} imóve${cart.nVgv===1?'l':'is'} · ${kBRL(cart.vgvPub)} publicado`, true)}
-    ${kpi('🔑', kBRL(cart.vgl)+'<span style="font-size:13px;color:var(--muted)">/mês</span>', 'VGL disponível (locação)', `${cart.nVgl} imóve${cart.nVgl===1?'l':'is'} para alugar`)}
-    ${kpi('🏢', kBRL(cart.adm)+'<span style="font-size:13px;color:var(--muted)">/mês</span>', 'Carteira administrada', `${cart.nAdm} contrato${cart.nAdm===1?'':'s'} ativo${cart.nAdm===1?'':'s'}`)}
-    ${kpi('💰', kBRL(soma(vAno)), 'VGV vendido no ano', `${vAno.length} venda${vAno.length===1?'':'s'} em ${A}`)}
-  </div>
-
-  <h2 style="font-size:16px;margin:22px 0 10px">🎯 Metas de ${MESES_L[M-1]}</h2>
-  <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:10px">
-    ${cardMeta('🏠','Captações no mês', capMes.length, meta('captacoes',M), n=>String(n))}
-    ${cardMeta('💰','Vendas no mês (R$)', soma(vMes), meta('vendas_valor',M), kBRL)}
-    ${cardMeta('🤝','Vendas no mês (qtd)', vMes.length, meta('vendas_qtd',M), n=>String(n))}
-    ${cardMeta('🔑','Locações no mês', locMes.length, meta('locacoes',M), n=>String(n))}
-  </div>
-  <h2 style="font-size:16px;margin:18px 0 10px">📅 Metas de ${A}</h2>
-  <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:10px">
-    ${cardMeta('💰','Vendas no ano (R$)', soma(vAno), meta('vendas_valor',0), kBRL)}
-    ${cardMeta('🤝','Vendas no ano (qtd)', vAno.length, meta('vendas_qtd',0), n=>String(n))}
-    ${cardMeta('🏠','Captações no ano', (D.captacoes||[]).filter(c=>noMes(c.created_at,A)).length, meta('captacoes',0), n=>String(n))}
+  <div class="stats" style="grid-template-columns:repeat(auto-fit,minmax(170px,1fr))">
+    ${kp('🏷️', kBRL(cart.vgv), 'VGV disponível', `${cart.nVgv} imóve${cart.nVgv===1?'l':'is'} à venda`, 'var(--accent-ink)')}
+    ${kp('🔑', kBRL(cart.vgl), 'VGL disponível', `por mês · ${cart.nVgl} para alugar`)}
+    ${kp('🏢', kBRL(cart.adm), 'Carteira administrada', `por mês · ${cart.nAdm} contratos`)}
+    ${kp('💰', kBRL(soma(vAno)), 'Vendido em '+A, `${vAno.length} venda${vAno.length===1?'':'s'}`)}
   </div>
 
-  <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(340px,1fr));gap:14px;margin-top:18px;align-items:start">
-    <div class="box"><h2>📈 Vendas e captações em ${A}</h2>${graficoAno()}</div>
-    <div class="box"><h2>🏆 Captações por corretor · ${MESES[M-1]}</h2>
-      ${rank.length?rank.map(r=>`<div style="margin-bottom:10px"><div class="row between" style="font-size:13px"><b>${esc(r.n)}</b><span class="muted">${r.cap}${r.meta?' / '+r.meta:''} captaç${r.cap===1?'ão':'ões'}${r.vend?' · '+kBRL(r.vend)+' vendido':''}</span></div>
-        <div style="height:10px;border-radius:99px;background:var(--surface-2);overflow:hidden;position:relative"><i style="display:block;height:100%;width:${Math.round(r.cap/mxCap*100)}%;background:${r.meta&&r.cap>=r.meta?'var(--ok)':'var(--accent)'};border-radius:99px"></i>${r.meta?`<span style="position:absolute;top:0;bottom:0;left:${Math.round(r.meta/mxCap*100)}%;border-left:2px dashed var(--fg);opacity:.5"></span>`:''}</div></div>`).join(''):'<div class="empty">Nenhuma captação neste mês.</div>'}</div>
+  <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:14px;margin-top:14px;align-items:start">
+    <div class="box"><h2>💰 Vendas por mês · ${A}</h2>${barrasAno()}</div>
+    <div class="box"><h2>🎯 Metas de ${MESES_L[M-1]}</h2><div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(110px,1fr));gap:10px;margin-top:6px">
+      ${anel(capMes.length, meta('captacoes',M), 'Captações', n=>String(n))}
+      ${anel(soma(vMes), meta('vendas_valor',M), 'Vendas (R$)', kBRL)}
+      ${anel(vMes.length, meta('vendas_qtd',M), 'Vendas (qtd)', n=>String(n))}
+      ${anel(locMes.length, meta('locacoes',M), 'Locações', n=>String(n))}</div></div>
   </div>
 
-  <h2 style="font-size:16px;margin:22px 0 10px">⏱️ Tempo de atendimento dos chamados <span class="muted" style="font-size:12.5px;font-weight:500">· últimos 90 dias</span></h2>
-  <div class="stats" style="margin-top:0">
-    ${kpi('💬', fmtH(tc.resp), 'Tempo médio da 1ª resposta', tc.n?tc.n+' chamado'+(tc.n>1?'s':'')+' respondido'+(tc.n>1?'s':''):'sem chamados no período', true)}
-    ${kpi('✅', fmtH(tc.resol), 'Tempo médio até resolver')}
-    ${kpi('🎯', tc.sla==null?'—':tc.sla+'%', 'Respondidos dentro do prazo', 'Prazo: 2h boleto · 24h geral · 48h manutenção')}
-    ${kpi('🔔', String(tc.acao.length), 'Chamados pedindo ação agora', tc.acao.filter(a=>a.tipo==='atrasado').length+' atrasado(s)')}
+  <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:14px;margin-top:14px;align-items:start">
+    <div class="box"><h2>💵 Onde está o valor</h2>
+      <div class="muted" style="font-size:11.5px;font-weight:700;margin:2px 0 6px">VENDA</div>${barrasH([
+      {n:'VGV à venda', v:cart.vgv}, {n:'Já publicado', v:cart.vgvPub, c:'var(--ok)'}, {n:'Vendido no ano', v:soma(vAno), c:'var(--info)'}], kBRL)}
+      <div class="muted" style="font-size:11.5px;font-weight:700;margin:10px 0 6px">LOCAÇÃO · POR MÊS</div>${barrasH([
+      {n:'Para alugar (VGL)', v:cart.vgl, c:'var(--warn)'}, {n:'Carteira adm', v:cart.adm, c:'var(--ok)'}], kBRL)}</div>
+    <div class="box"><h2>🏢 Imóveis</h2>${donut([{n:'Alugados (ativos)',v:ativos,c:'var(--ok)'},{n:'Contrato em andamento',v:andamento,c:'var(--info)'},{n:'Disponíveis',v:disp,c:'var(--accent)'},{n:'Em desocupação',v:desoc,c:'var(--warn)'}], ativos+andamento+disp, 'imóveis')}</div>
+    <div class="box"><h2>🎫 Chamados abertos</h2>${donut([{n:'No prazo',v:Math.max(0,chAb.length-chAtr-chHoje),c:'var(--ok)'},{n:'Vencem hoje',v:chHoje,c:'var(--warn)'},{n:'Atrasados',v:chAtr,c:'var(--bad)'}], chAb.length, 'abertos')}
+      <div class="row" style="gap:12px;font-size:12px;color:var(--muted);margin-top:8px;flex-wrap:wrap"><span>💬 1ª resposta: <b style="color:var(--fg)">${fmtH(tc.resp)}</b></span><span>🎯 No prazo: <b style="color:var(--fg)">${tc.sla==null?'—':tc.sla+'%'}</b></span></div></div>
+    <div class="box"><h2>🤝 Funil comercial</h2>${NG.length?barrasH(fun.map(([k,n])=>({n, v:ate(k)})), v=>String(v))+`<div class="muted" style="font-size:11.5px">Conversão lead → cliente: <b style="color:var(--fg)">${ate('lead')?Math.round(ate('cliente')/ate('lead')*100):0}%</b> · ${NG.filter(n=>n.etapa==='perdido').length} perdido(s)</div>`:'<div class="empty">Sem negócios ainda. Cadastre os leads em Comercial → Negócios.</div>'}</div>
+    <div class="box"><h2>📝 Contratos de locação</h2>
+      <div class="row" style="gap:16px;margin-bottom:10px;flex-wrap:wrap"><div><div class="muted" style="font-size:11.5px">Até assinar</div><b style="font:700 20px var(--f-display)">${fmtD(tk.ass)}</b></div><div><div class="muted" style="font-size:11.5px">Até as chaves</div><b style="font:700 20px var(--f-display)">${fmtD(tk.atv)}</b></div><div><div class="muted" style="font-size:11.5px">Parados 7+ dias</div><b style="font:700 20px var(--f-display);${tk.parados.length?'color:var(--bad)':''}">${tk.parados.length}</b></div></div>
+      ${barrasH(ETAPAS.slice(0,6).map((e,i)=>({n:e, v:Math.round((tk.etapas[i]||0)*10)/10, c:'var(--info)'})), v=>v?String(v).replace('.',',')+'d':'—')}</div>
   </div>
-  <div class="box" style="margin-top:10px"><h2>🔔 Follow-up · o que fazer agora</h2>
+
+  <details class="box" style="margin-top:14px" ${tc.acao.some(a=>a.tipo==='atrasado')?'open':''}><summary style="cursor:pointer;font-weight:700">🔔 Chamados de clientes pedindo ação (${tc.acao.length})</summary><div style="margin-top:10px">
     ${tc.acao.length?`<div style="display:grid;gap:8px">${tc.acao.map(a=>{ const p=P(a.h.pessoa_id), cl=a.tipo==='atrasado'?'p-bad':a.tipo==='followup'?'p-acc':'p-warn';
       const xp=parteDe(a.h.contrato_id,a.h.pessoa_id), wmsg=`Olá${p.nome?', '+primeiro(p.nome):''}! Aqui é da Citihaus 🧡\n`+(a.tipo==='followup'?`Passando para saber sobre o seu chamado ${a.h.protocolo} (${a.h.titulo}). Conseguiu ver a nossa última mensagem?`:`Recebemos o seu chamado ${a.h.protocolo} (${a.h.titulo}) e já estamos cuidando.`)+(xp?`\n\nAcompanhe por aqui: ${linkPortal(xp.token)}`:'');
       return `<div style="display:flex;gap:8px;align-items:stretch;flex-wrap:wrap"><button class="card" data-chteam="${a.h.id}" style="flex:1;min-width:240px;flex-direction:row;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap">
         <div style="min-width:0"><span class="code">${esc(a.h.protocolo)}</span><h4>${esc(a.h.titulo)}</h4><span class="meta">${esc(nomeP(p,a.h.papel))} · ${esc(a.h.tipo)}</span></div>
-        <span class="pill ${cl}">${esc(a.txt)}</span></button><div style="display:flex;align-items:center">${waBtn(p.telefone, wmsg, a.tipo==='followup'?'Cobrar retorno':'Avisar cliente')}</div></div>`; }).join('')}</div>`:'<div class="empty">Tudo respondido. Nenhum chamado esperando a equipe ou parado com o cliente. 👏</div>'}</div>
-
-  <h2 style="font-size:16px;margin:22px 0 10px">📝 Tempo dos contratos de locação</h2>
-  <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(340px,1fr));gap:14px;align-items:start">
-    <div class="box"><div class="stats" style="margin-top:0;grid-template-columns:1fr 1fr">
-      ${kpi('✍️', fmtD(tk.ass), 'Do início até a assinatura', tk.nAss?'média de '+tk.nAss+' contrato'+(tk.nAss>1?'s':''):'ainda sem contratos assinados', true)}
-      ${kpi('🔑', fmtD(tk.atv), 'Do início até as chaves', tk.nAtv?'média de '+tk.nAtv+' contrato'+(tk.nAtv>1?'s':''):'ainda sem contratos ativos')}</div>
-      <div style="font-size:12.5px;font-weight:600;color:var(--muted);margin:14px 0 8px">Tempo médio em cada etapa (onde trava)</div>
-      ${ETN.map((e,i)=>{ const v=tk.etapas[i]; return `<div style="display:grid;grid-template-columns:120px 1fr 70px;gap:8px;align-items:center;font-size:12.5px;margin-bottom:6px"><span>${esc(e)}</span>
-        <div style="height:10px;border-radius:99px;background:var(--surface-2);overflow:hidden"><i style="display:block;height:100%;width:${v?Math.max(4,Math.round(v/mxEt*100)):0}%;background:${v&&v===Math.max(...tk.etapas.map(x=>x||0))?'var(--bad)':'var(--info)'};border-radius:99px"></i></div><span class="num" style="text-align:right">${fmtD(v)}</span></div>`; }).join('')}
-      <div class="muted" style="font-size:11.5px;margin-top:6px">A assinatura conta quando o contrato sai de “Aprovação”. Os tempos são medidos a partir de hoje para os contratos novos.</div></div>
-    <div class="box"><h2>🐢 Contratos parados há 7 dias ou mais</h2>
-      ${tk.parados.length?tk.parados.map(x=>`<button class="card" data-open="${x.c.id}" data-go="1" style="flex-direction:row;align-items:center;justify-content:space-between;gap:10px;margin-bottom:8px">
-        <div style="min-width:0"><span class="code">${esc(pastaC(x.c))}</span><h4>${esc(imvDe(x.c).titulo)}</h4><span class="meta">${esc(ETAPAS[x.c.etapa])} · ${esc(x.c.corretor||'')}</span></div>
-        <span class="pill ${x.dias>=14?'p-bad':'p-warn'}">${Math.floor(x.dias)} dias</span></button>`).join(''):'<div class="empty">Nenhum contrato parado. 🚀</div>'}</div>
-  </div>
-
-  <div class="head" style="margin-top:26px"><div><h2 style="font-size:16px;margin:0">💰 Vendas de ${A}</h2></div></div>
+        <span class="pill ${cl}">${esc(a.txt)}</span></button><div style="display:flex;align-items:center">${waBtn(p.telefone, wmsg, a.tipo==='followup'?'Cobrar retorno':'Avisar cliente')}</div></div>`; }).join('')}</div>`:'<div class="empty">Tudo respondido. Nenhum chamado esperando a equipe ou parado com o cliente. 👏</div>'}</div></details>
+  ${tk.parados.length?`<details class="box" style="margin-top:10px"><summary style="cursor:pointer;font-weight:700">🐢 Contratos parados há 7 dias ou mais (${tk.parados.length})</summary><div style="margin-top:10px">${tk.parados.map(x=>`<button class="card" data-open="${x.c.id}" data-go="1" style="flex-direction:row;align-items:center;justify-content:space-between;gap:10px;margin-bottom:8px"><div style="min-width:0"><span class="code">${esc(pastaC(x.c))}</span><h4>${esc(imvDe(x.c).titulo)}</h4><span class="meta">${esc(ETAPAS[x.c.etapa])}</span></div><span class="pill ${x.dias>=14?'p-bad':'p-warn'}">${Math.floor(x.dias)} dias</span></button>`).join('')}</div></details>`:''}
+  <details class="box" style="margin-top:10px"><summary style="cursor:pointer;font-weight:700">💰 Vendas registradas em ${A} (${vAno.length})</summary><div style="margin-top:10px">
   <div class="tbl-wrap"><table><thead><tr><th>Data</th><th>Imóvel</th><th>Corretor</th><th>Valor</th><th>Comissão</th><th></th></tr></thead><tbody>
   ${vAno.length?vAno.map(v=>{ const c=v.captacao_id&&(D.captacoes||[]).find(k=>k.id===v.captacao_id);
     return `<tr><td class="num">${dataBR(v.data)}</td><td><b>${esc(v.imovel||'')}</b>${c?` <span class="pill p-acc">CAP-${String(c.numero).padStart(3,'0')}</span>`:''}${v.obs?`<div class="muted" style="font-size:12px">${esc(v.obs)}</div>`:''}</td><td>${esc(v.corretor)}</td>
     <td class="num"><b>${brl(v.valor)}</b></td><td class="num">${v.comissao?brl(v.comissao):'—'}</td><td style="text-align:right">${isAdm()?`<button class="btn sm ghost" style="color:var(--bad)" data-dvdel="${v.id}">${S.dvDel===v.id?'Confirmar exclusão':'Excluir'}</button>`:''}</td></tr>`; }).join('')
     :'<tr><td colspan="6" class="muted">Nenhuma venda registrada em '+A+'. Use “+ Registrar venda”.</td></tr>'}
-  </tbody></table></div>`;
+  </tbody></table></div></div></details>`;
 }
 
 /* ---------- modais ---------- */

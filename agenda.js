@@ -42,28 +42,25 @@ function agendaHtml(){
   const chAtr=pz?chAb.filter(h=>ue(new Date(), pz(h))<0).length:0, chHoje=pz?chAb.filter(h=>ue(new Date(), pz(h))===0).length:0;
   const ng=(D.negocios||[]).filter(n=>!n.arquivado_em && !['cliente','perdido'].includes(n.etapa)), ngFu=ng.filter(n=>n.proximo_contato && n.proximo_contato<=hoje).length, ngOpp=ng.filter(n=>n.etapa==='opp').length;
   const ctAnd=D.contratos.filter(c=>c.etapa<6).length, capAnd=(D.captacoes||[]).filter(c=>c.etapa<5 && !c.arquivada_em).length;
-  const card=(ic,tit,big,sub,go,alerta)=>`<button class="card" data-navgo="${go}" style="text-align:left;${alerta?'border-color:var(--bad);box-shadow:inset 3px 0 0 var(--bad)':''}"><span class="code">${ic} ${tit}</span><div style="font-family:var(--f-display);font-size:28px;font-weight:700;line-height:1.1;${alerta?'color:var(--bad)':''}">${big}</div><div class="meta">${sub}</div></button>`;
+  const card=(ic,tit,big,sub,go,alerta)=>`<button data-navgo="${go}" style="all:unset;box-sizing:border-box;cursor:pointer;display:flex;gap:10px;align-items:center;padding:9px 12px;border:1px solid ${alerta?'var(--bad)':'var(--line)'};border-radius:12px;background:var(--surface,#fff);min-width:0">
+    <span style="font-size:20px;flex:none">${ic}</span><b style="font:700 22px var(--f-display);flex:none;${alerta?'color:var(--bad)':''}">${big}</b>
+    <span style="min-width:0;line-height:1.25"><span style="display:block;font-size:12.5px;font-weight:700">${tit}</span><span class="muted" style="display:block;font-size:11.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${sub}</span></span></button>`;
   return `<div class="head"><div><h1>🏠 ${saud}, ${esc(eu().split(' ')[0])}!</h1><p>${new Date().toLocaleDateString('pt-BR',{weekday:'long',day:'2-digit',month:'long'})} · o que pede atenção hoje</p></div><button class="btn pri" data-agnovo="1">+ Agendar</button></div>
-  <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:10px;margin-bottom:14px">
+  <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:8px;margin-bottom:14px">
     ${card('📅','Minha agenda', atrasados.length+nHoje, `${nHoje} hoje · ${atrasados.length} atrasado(s)`, 'agenda', atrasados.length>0)}
-    ${card('🎫','Chamados', chAtr+chHoje, `${chAtr} atrasado(s) · ${chHoje} vencem hoje · ${chAb.length} abertos`, 'contratos|chamados', chAtr>0)}
-    ${card('🤝','Comercial', ngFu, `follow-up(s) para hoje · ${ngOpp} oportunidade(s)`, 'contratos|comercial', false)}
+    ${card('🎫','Chamados', chAtr+chHoje, `${chAtr} atrasado(s) · ${chHoje} hoje · ${chAb.length} abertos`, 'contratos|chamados', chAtr>0)}
+    ${card('🤝','Comercial', ngFu, `follow-up(s) hoje · ${ngOpp} oportunidade(s)`, 'contratos|comercial', false)}
     ${card('📄','Em andamento', ctAnd+capAnd, `${ctAnd} contrato(s) · ${capAnd} captação(ões)`, 'contratos|contratos', false)}
   </div>
   <h2 style="font-size:16px;margin:6px 0 8px">📅 Agenda</h2>
   <div class="row" style="gap:8px;flex-wrap:wrap;margin:0 0 12px"><div class="seg-b">${[[eu(),'👤 Minha'],...pessoas.filter(p=>p!==eu()).map(p=>[p,p.split(' ')[0]]),['todos','Todos']].map(([k,v])=>`<button data-agpess="${esc(k)}" aria-pressed="${(S.agPess||eu())===k}">${esc(v)}</button>`).join('')}</div></div>
-  <div class="stats">
-    <div class="stat ${atrasados.length?'hl':''}"><b style="${atrasados.length?'color:var(--bad)':''}">${atrasados.length}</b><span>atrasados</span></div>
-    <div class="stat"><b>${nHoje}</b><span>para hoje</span></div>
-    <div class="stat"><b>${n7}</b><span>nos próximos 7 dias</span></div>
-    <div class="stat"><b>${L.filter(a=>a.feito_em && Date.now()-new Date(a.feito_em)<7*864e5).length}</b><span>concluídos na semana</span></div>
-  </div>
+  <div class="muted" style="font-size:12.5px;margin:-4px 0 8px">${nHoje} para hoje · ${n7} nos próximos 7 dias · ${L.filter(a=>a.feito_em && Date.now()-new Date(a.feito_em)<7*864e5).length} concluído(s) na semana</div>
   ${atrasados.length?`<div class="box" style="margin-top:12px;border-color:var(--bad)"><h2 style="color:var(--bad)">⏰ Atrasados (${atrasados.length})</h2>${atrasados.map(a=>item(a,false)).join('')}</div>`:''}
   <div class="row between" style="margin:16px 0 8px;gap:8px;flex-wrap:wrap"><h2 style="font-size:16px;margin:0">Semana de ${ini.toLocaleDateString('pt-BR',{day:'2-digit',month:'2-digit'})} a ${diasW[6].toLocaleDateString('pt-BR',{day:'2-digit',month:'2-digit'})}</h2>
     <div class="row" style="gap:6px"><button class="btn sm" data-agsem="-1">← Anterior</button><button class="btn sm ${S.agSem?'':'pri'}" data-agsem="0">Esta semana</button><button class="btn sm" data-agsem="1">Próxima →</button></div></div>
   <div class="board-scroll"><div class="board" style="grid-auto-columns:minmax(190px,1fr)">${diasW.map(d=>{ const its=doDia(d), eh=ymd(d)===hoje;
-    return `<section class="col" style="${eh?'outline:2px solid var(--accent);outline-offset:-2px':''}"><div class="col-h"><div><h3>${DS[d.getDay()]} ${d.toLocaleDateString('pt-BR',{day:'2-digit',month:'2-digit'})}${eh?' · hoje':''}</h3><small>${its.filter(a=>!a.feito_em).length} pendente(s)</small></div><button class="btn sm ghost" data-agnovo="1" data-agdia="${ymd(d)}" title="Agendar neste dia" style="padding:2px 8px">+</button></div>
-      ${its.length?its.map(a=>item(a,true)).join(''):'<div class="empty">Livre</div>'}</section>`; }).join('')}</div></div>`;
+    return `<section class="col" style="min-height:0;padding:8px;${eh?'outline:2px solid var(--accent);outline-offset:-2px':''}"><div class="col-h" style="margin-bottom:6px"><div><h3>${DS[d.getDay()]} ${d.toLocaleDateString('pt-BR',{day:'2-digit',month:'2-digit'})}${eh?' · hoje':''}</h3><small>${its.filter(a=>!a.feito_em).length} pendente(s)</small></div><button class="btn sm ghost" data-agnovo="1" data-agdia="${ymd(d)}" title="Agendar neste dia" style="padding:2px 8px">+</button></div>
+      ${its.length?its.map(a=>item(a,true)).join(''):'<div class="muted" style="font-size:12px;text-align:center;padding:6px 0">—</div>'}</section>`; }).join('')}</div></div>`;
 }
 
 function modalAg(){
