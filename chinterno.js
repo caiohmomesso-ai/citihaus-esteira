@@ -55,21 +55,26 @@ chamadosEquipe = function(){
   <div class="row" style="gap:8px;flex-wrap:wrap;margin:-4px 0 12px"><div class="seg-b">${[['todos','Todos'],['cliente','👤 De clientes'],['interno','🏢 Internos'],['atrasado',`⏰ Atrasados${nAtr?' ('+nAtr+')':''}`]].map(([k,v])=>`<button data-chfil="${k}" aria-pressed="${f===k}">${v}</button>`).join('')}</div>
    <span class="muted" style="font-size:12px">Prazo em dias úteis: ${PRI_K.map(k=>`${PRI[k].ic} ${PRI[k].n} ${PRI[k].d}`).join(' · ')}</span></div>
   <div class="board-scroll"><div class="board" style="grid-auto-columns:minmax(250px,1fr)">${cols.map(s=>{
-    const hs=D.chamados.filter(h=>h.status===s && pass(h)); s==='resolvido' ? hs.sort((a,b)=>new Date(b.updated_at)-new Date(a.updated_at)) : hs.sort(ordemPrazo);
+    const hs=D.chamados.filter(h=>h.status===s && pass(h) && !h.arquivado_em); s==='resolvido' ? hs.sort((a,b)=>new Date(b.updated_at)-new Date(a.updated_at)) : hs.sort(ordemPrazo);
     return `<section class="col"><div class="col-h"><div><h3>${chSt(s,'equipe')[1]}</h3><small>${desc[s]}</small></div><span class="count">${hs.length}</span></div>
+    ${s==='resolvido'&&hs.length?`<button class="btn sm ghost" style="width:100%;margin-bottom:8px" data-charqall="1">${S.chArqAll?'Confirmar: arquivar '+hs.length:'📦 Arquivar resolvidos ('+hs.length+')'}</button>`:''}
     ${hs.length?hs.map(h=>{ const c=h.contrato_id&&D.contratos.find(k=>k.id===h.contrato_id), quem = h.interno ? `🏢 Interno${h.responsavel?' · '+esc(h.responsavel):''}` : `${esc(nomeP(P(h.pessoa_id),h.papel))} · ${PAPEL[h.papel]||''}`;
       return `<button class="card" data-chteam="${h.id}"><span class="code">${esc(h.protocolo)}</span><h4>${esc(h.titulo)}</h4>
       <div class="meta">${quem}</div><div class="meta">${c?esc(pastaC(c)):h.imovel_id?'🏠 '+esc(imvNome(h.imovel_id)):h.interno?'<span class="muted">Sem contrato vinculado</span>':''}</div>
       <div class="row" style="gap:5px;flex-wrap:wrap">${priPill(h)}${prazoPill(h)}${h.orc_status==='pendente'?'<span class="pill p-acc">Orçamento pendente</span>':''}${s==='resolvido'&&!h.interno?(h.avaliacao?`<span class="pill p-ok">${'★'.repeat(h.avaliacao)}</span>`:'<span class="pill p-mute">Sem avaliação</span>'):''}</div></button>`; }).join(''):'<div class="empty">Nenhum chamado</div>'}</section>`;}).join('')}
-  </div></div>`;
+  </div></div>
+  ${(()=>{ const arq=D.chamados.filter(h=>h.arquivado_em).sort((a,b)=>new Date(b.arquivado_em)-new Date(a.arquivado_em)); if(!arq.length) return '';
+    return `<div style="margin-top:12px"><button class="btn sm ghost" data-charqver="1">📦 Chamados arquivados (${arq.length}) ${S.chArqVer?'▲':'▼'}</button>
+    ${S.chArqVer?`<div class="tbl-wrap" style="margin-top:8px"><table><thead><tr><th>Protocolo</th><th>Título</th><th>Origem</th><th>Arquivado</th><th></th></tr></thead><tbody>${arq.map(h=>`<tr><td class="mono">${esc(h.protocolo)}</td><td><b>${esc(h.titulo)}</b></td><td>${h.interno?'🏢 Interno':'👤 '+esc(nomeP(P(h.pessoa_id),h.papel))}</td><td class="num">${dataBR(h.arquivado_em)}</td><td><button class="btn sm" data-chteam="${h.id}">Abrir</button></td></tr>`).join('')}</tbody></table></div>`:''}</div>`; })()}`;
 };
 
 /* ---------- gaveta do chamado ---------- */
+const arqSec = h => h.status!=='resolvido' ? '' : `<div class="sec"><div class="gate yes"><div class="gt">${h.arquivado_em?`<b>📦 Arquivado em ${dataBR(h.arquivado_em)}.</b>`:'<b>✅ Resolvido.</b> Arquive para tirar do quadro.'}</div><button class="btn ${h.arquivado_em?'':'pri'}" data-charq="${h.id}|${h.arquivado_em?0:1}">${h.arquivado_em?'↩ Voltar para o quadro':'📦 Arquivar'}</button></div></div>`;
 const priSec = h => `<div class="sec"><h3>Prioridade <span class="muted" style="font-size:12px;font-weight:500">· prazo ${prazoDe(h).toLocaleDateString('pt-BR')} (${(PRI[h.prioridade]||PRI.normal).d} dia${(PRI[h.prioridade]||PRI.normal).d>1?'s':''} úte${(PRI[h.prioridade]||PRI.normal).d>1?'is':'il'} desde a abertura)</span></h3>
   <div class="row" style="gap:6px;flex-wrap:wrap">${PRI_K.map(k=>`<button class="btn sm ${h.prioridade===k?'pri':''}" data-chpri="${h.id}|${k}">${PRI[k].ic} ${PRI[k].n} · ${PRI[k].d}d</button>`).join('')}</div></div>`;
 const chDrawerInt = chDrawer;
 chDrawer = function(h){
-  if(!h.interno){ const out=chDrawerInt(h); const i=out.indexOf('<div class="sec"><h3>Status</h3>'); if(i<0) return out; const j=out.indexOf('</div></div>', i)+12; return out.slice(0,j)+priSec(h)+out.slice(j); }
+  if(!h.interno){ const out=chDrawerInt(h); const i=out.indexOf('<div class="sec"><h3>Status</h3>'); if(i<0) return out; const j=out.indexOf('</div></div>', i)+12; return out.slice(0,j)+arqSec(h)+priSec(h)+out.slice(j); }
   const c=h.contrato_id&&D.contratos.find(k=>k.id===h.contrato_id), ms=(D.msgs[h.id]||[]).slice().sort((a,b)=>new Date(a.created_at)-new Date(b.created_at));
   return `<div class="ov" data-close="1"><aside class="drawer" role="dialog" aria-label="Chamado ${esc(h.protocolo)}">
   <div class="d-head"><div class="row between" style="align-items:flex-start;flex-wrap:nowrap"><div style="min-width:0"><span class="mono" style="color:var(--accent-ink)">${esc(h.protocolo)} · 🏢 Interno</span>
@@ -78,7 +83,7 @@ chDrawer = function(h){
     <button class="x" data-close="1" aria-label="Fechar">×</button></div></div>
   <div class="d-body">
    <div class="sec"><h3>Status</h3><div class="row">${['aberto','atendimento','aguardando','resolvido'].map(s=>`<button class="btn sm ${h.status===s?'pri':''}" data-chst="${h.id}|${s}">${chSt(s,'equipe')[1]}</button>`).join('')}</div></div>
-   ${priSec(h)}
+   ${arqSec(h)}${priSec(h)}
    <div class="sec"><h3>Vínculo e responsável</h3><form id="f-chvinc" data-ch="${h.id}" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:8px;align-items:end">
      <label class="f">Contrato (opcional)<select id="v-ct"><option value="">— Sem contrato —</option>${ctOpcoes(h.contrato_id)}</select></label>
      <label class="f">Imóvel (opcional)<select id="v-imv"><option value="">— Sem imóvel —</option>${imvOpcoes(h.imovel_id)}</select></label>
@@ -123,6 +128,12 @@ document.addEventListener('change', e=>{ if(e.target.closest && e.target.closest
 document.addEventListener('click', e=>{
   const b=e.target.closest('button'); if(!b || !S.me) return;
   if(b.dataset.chnovo){ e.stopImmediatePropagation(); S.modal={tipo:'chint', ct:b.dataset.chnovoct||''}; return render(); }
+  if(b.dataset.charqver){ e.stopImmediatePropagation(); S.chArqVer=!S.chArqVer; return render(); }
+  if(b.dataset.charq){ e.stopImmediatePropagation(); const [id,on]=b.dataset.charq.split('|');
+    return acao(async()=>{ await q(sb.from('chamados').update({arquivado_em:on==='1'?new Date().toISOString():null}).eq('id',id)); if(on==='1') S.chTeam=null; }, on==='1'?'Chamado arquivado ✓':'Chamado de volta no quadro'); }
+  if(b.dataset.charqall){ e.stopImmediatePropagation(); if(!S.chArqAll){ S.chArqAll=1; render(); setTimeout(()=>{ if(S.chArqAll){ S.chArqAll=0; render(); } },6000); return; }
+    S.chArqAll=0; const ids=D.chamados.filter(h=>h.status==='resolvido'&&!h.arquivado_em).map(h=>h.id);
+    return acao(async()=>{ await q(sb.from('chamados').update({arquivado_em:new Date().toISOString()}).in('id',ids)); }, ids.length+' chamado'+(ids.length>1?'s arquivados':' arquivado')+' ✓'); }
   if(b.dataset.chfil){ e.stopImmediatePropagation(); S.chFil=b.dataset.chfil; return render(); }
   if(b.dataset.chpri){ e.stopImmediatePropagation(); const [id,k]=b.dataset.chpri.split('|');
     return acao(async()=>{ await q(sb.from('chamados').update({prioridade:k, updated_at:new Date().toISOString()}).eq('id',id)); }, `Prioridade: ${PRI[k].n} · prazo ${prazoDe(Object.assign({},D.chamados.find(h=>h.id===id),{prioridade:k})).toLocaleDateString('pt-BR')}`); }

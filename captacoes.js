@@ -86,11 +86,11 @@ function captacoesHtml(){
   ${(!ig.ia||!ig.loft)?`<div class="gate no" style="margin-top:12px"><div class="gt"><b>Integrações pendentes:</b> ${[!ig.ia?'IA para descrições (chave Anthropic)':'', !ig.loft?'Loft CRM (endereço + chave da API)':''].filter(Boolean).join(' · ')}.${S.me.papel==='admin'?' Configure em ⚙ Integrações.':' Peça ao administrador.'}</div></div>`:''}
   <div class="board-scroll"><div class="board">
   ${CE.map((e,i)=>{ const cs=L.filter(c=>c.etapa===i && !c.arquivada_em).slice().reverse();
-    return `<section class="col"><div class="col-h"><div><h3>${CE_IC[i]} ${e}</h3><small>${CE_DESC[i]}</small></div><span class="count">${cs.length}</span></div>
+    return `<section class="col"><div class="col-h"><div><h3>${CE_IC[i]} ${e}</h3><small>${CE_DESC[i]}</small></div><span class="count">${cs.length}</span></div>${i===5&&cs.length?`<button class="btn sm ghost" style="width:100%;margin-bottom:8px" data-caparqall="1">${S.capArqAll?'Confirmar: arquivar '+cs.length:'📦 Arquivar todas ('+cs.length+')'}</button>`:''}
     ${cs.length?cs.map(capCard).join(''):'<div class="empty">Nenhuma captação aqui</div>'}</section>`; }).join('')}
   </div></div>
   ${(()=>{ const arq=L.filter(c=>c.arquivada_em).sort((a,b)=>new Date(b.arquivada_em)-new Date(a.arquivada_em)); if(!arq.length) return '';
-    return `<div style="margin-top:14px"><button class="btn sm ghost" data-caparqver="1">📦 Concluídas, fora da esteira (${arq.length}) ${S.capArqVer?'▲':'▼'}</button>
+    return `<div style="margin-top:14px"><button class="btn sm ghost" data-caparqver="1">📦 Arquivadas (${arq.length}) ${S.capArqVer?'▲':'▼'}</button>
     ${S.capArqVer?`<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:10px;margin-top:10px">${arq.map(capCard).join('')}</div>`:''}</div>`; })()}`;
 }
 
@@ -215,8 +215,8 @@ function capDrawer(c){
     <button class="x" data-capclose="1" aria-label="Fechar">×</button></div>
     <div style="display:flex;gap:4px;margin-top:12px">${passos}</div></div>
   <div class="d-body">
-    ${c.etapa>=5?`<div class="gate yes"><div class="gt">${c.arquivada_em?`<b>📦 Fora da esteira desde ${new Date(c.arquivada_em).toLocaleDateString('pt-BR')}.</b> O imóvel continua em Imóveis.`:'<b>✅ Captação concluída.</b> O imóvel já está em Imóveis. Pode tirar da esteira para deixar o quadro só com o que está em andamento.'}</div>
-      <button class="btn ${c.arquivada_em?'':'pri'}" data-caparq="${c.id}|${c.arquivada_em?0:1}">${c.arquivada_em?'↩ Voltar para a esteira':'📦 Tirar da esteira'}</button></div>`:''}
+    ${c.etapa>=5?`<div class="gate yes"><div class="gt">${c.arquivada_em?`<b>📦 Arquivada em ${new Date(c.arquivada_em).toLocaleDateString('pt-BR')}.</b> O imóvel continua em Imóveis.`:'<b>✅ Captação concluída.</b> O imóvel já está em Imóveis. Arquive para tirar da esteira.'}</div>
+      <button class="btn ${c.arquivada_em?'':'pri'}" data-caparq="${c.id}|${c.arquivada_em?0:1}">${c.arquivada_em?'↩ Voltar para a esteira':'📦 Arquivar'}</button></div>`:''}
     ${herd.length?`<div class="gate" style="background:var(--bad-soft);color:var(--bad)"><div class="gt"><b>Avançou com pendências de etapas anteriores:</b><ul>${herd.map(x=>`<li>${esc(x)}</li>`).join('')}</ul></div></div>`:''}
     ${avancar}
     ${secs}
@@ -355,11 +355,14 @@ document.addEventListener('click', e=>{
   if(d.tab==='captacoes'){ e.stopImmediatePropagation(); S.tab='captacoes'; S.open=null; S.chTeam=null; try{history.replaceState(null,'','#captacoes');}catch(_){} return render(); }
   if(d.capclose!==undefined){ if(e.target!==b && !b.matches('button')) return; e.stopImmediatePropagation(); S.capOpen=null; S.capForce=null; S.capDel=null; return render(); }
   if(d.capopen){ e.stopImmediatePropagation(); S.capOpen=d.capopen; S.capForce=null; S.capDel=null; return render(); }
+  if(d.caparqall){ e.stopImmediatePropagation(); if(!S.capArqAll){ S.capArqAll=1; render(); setTimeout(()=>{ if(S.capArqAll){ S.capArqAll=0; render(); } },6000); return; }
+    S.capArqAll=0; const ids=D.captacoes.filter(c=>c.etapa>=5&&!c.arquivada_em).map(c=>c.id), agora=new Date().toISOString();
+    return acao(async()=>{ await q(sb.from('captacoes').update({arquivada_em:agora}).in('id',ids)); await q(sb.from('captacao_hist').insert(ids.map(id=>({captacao_id:id, texto:'Arquivada por '+S.me.nome})))); }, ids.length+' captaç'+(ids.length>1?'ões arquivadas':'ão arquivada')+' ✓ · continuam em Imóveis'); }
   if(d.caparqver){ e.stopImmediatePropagation(); S.capArqVer=!S.capArqVer; return render(); }
   if(d.caparq){ e.stopImmediatePropagation(); const [id,on]=d.caparq.split('|');
     return acao(async()=>{ await q(sb.from('captacoes').update({arquivada_em: on==='1'?new Date().toISOString():null}).eq('id',id));
-      await q(sb.from('captacao_hist').insert({captacao_id:id, texto: on==='1'?'Tirada da esteira (captação concluída) por '+S.me.nome:'Voltou para a esteira por '+S.me.nome}));
-      if(on==='1') S.capOpen=null; }, on==='1'?'Captação concluída e fora da esteira ✓ · continua em Imóveis':'Captação de volta na esteira'); }
+      await q(sb.from('captacao_hist').insert({captacao_id:id, texto: on==='1'?'Arquivada por '+S.me.nome:'Voltou para a esteira por '+S.me.nome}));
+      if(on==='1') S.capOpen=null; }, on==='1'?'Captação arquivada ✓ · continua em Imóveis':'Captação de volta na esteira'); }
   if(d.capnew){ e.stopImmediatePropagation(); S.capModal={tipo:'nova'}; return render(); }
   if(d.capinteg){ e.stopImmediatePropagation(); S.capModal={tipo:'integ'}; return render(); }
   if(d.capmclose){ e.stopImmediatePropagation(); S.capModal=null; return render(); }
