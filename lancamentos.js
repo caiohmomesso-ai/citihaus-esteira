@@ -62,6 +62,7 @@ function fichaHtml(e){
   const disp=u.filter(x=>x.status==='Disponível'), vs=disp.map(x=>Number(x.valor)||0).filter(Boolean);
   const estoque = vs.reduce((a,b)=>a+b,0);
   const torres=[...new Set(u.map(x=>x.torre).filter(Boolean))], dorms=[...new Set(u.map(x=>x.dormitorios).filter(Boolean))].sort();
+  const temTer=u.some(x=>x.area_terreno);
   const lista=u.filter(x=>(!l.st||x.status===l.st)&&(!l.torre||x.torre===l.torre)&&(!l.dorm||String(x.dormitorios)===l.dorm));
   const dado=(r,v)=>v?`<div><span class="muted" style="font-size:11.5px;display:block">${r}</span><b style="font-size:14.5px">${esc(v)}</b></div>`:'';
   return `<button class="btn sm ghost" data-lancvoltar="1" style="margin-bottom:12px">← Todos os lançamentos</button>
@@ -93,14 +94,23 @@ function fichaHtml(e){
         ${torres.length>1?`<select id="lanc-ftorre" style="${campo};width:auto"><option value="">Todas as torres</option>${torres.map(t=>`<option ${l.torre===t?'selected':''}>${esc(t)}</option>`).join('')}</select>`:''}
         ${dorms.length>1?`<select id="lanc-fdorm" style="${campo};width:auto"><option value="">Todos os dormitórios</option>${dorms.map(d=>`<option value="${d}" ${l.dorm===String(d)?'selected':''}>${d} dorm.</option>`).join('')}</select>`:''}
         <span class="muted" style="font-size:12.5px;align-self:center">${lista.length} unidade${lista.length===1?'':'s'}</span></div>
-      <div class="tbl-wrap"><table><thead><tr>${torres.length?'<th>Torre</th>':''}<th>Unidade</th><th>Andar</th><th>Tipologia</th><th>Área</th><th>Dorm.</th><th>Vagas</th><th>Valor</th><th>Situação</th><th></th></tr></thead><tbody>
-      ${lista.map(x=>`<tr><td>${torres.length?esc(x.torre||'—')+'</td><td>':''}<b>${esc(x.unidade||'—')}</b></td><td>${esc(x.andar||'—')}</td><td>${esc(x.tipologia||'—')}</td>
-        <td class="num">${x.area?m2(x.area):'—'}</td><td class="num">${x.dormitorios||'—'}${x.suites?' ('+x.suites+' suíte'+(x.suites>1?'s':'')+')':''}</td><td class="num">${x.vagas||'—'}</td>
-        <td class="num"><b>${x.valor?brl(x.valor):'—'}</b></td>
-        <td><select data-lancunst="${x.id}" style="${campo};padding:5px 8px;width:auto;font-size:12.5px">${STATUS_U.map(s=>`<option ${x.status===s?'selected':''}>${s}</option>`).join('')}</select></td>
-        <td style="white-space:nowrap"><button class="btn sm ghost" data-lancun="${x.id}">Editar</button></td></tr>`).join('')||`<tr><td colspan="10" class="muted">Nenhuma unidade com esses filtros.</td></tr>`}
-      </tbody></table></div>`
-      :`<div class="empty">Nenhuma unidade cadastrada. Use <b>📊 Importar tabela</b> para colar a planilha ou enviar o PDF que a construtora mandou.</div>`}</div>
+      ${(()=>{ const col=[
+        ['Torre', x=>esc(x.torre||'—'), torres.length, ''],
+        ['Unidade', x=>`<b>${esc(x.unidade||'—')}</b>`, true, ''],
+        ['Terreno', x=>x.area_terreno?m2(x.area_terreno):'—', u.some(x=>x.area_terreno), 'num'],
+        ['Área', x=>x.area?m2(x.area):'—', u.some(x=>x.area), 'num'],
+        ['Andar', x=>esc(x.andar||'—'), u.some(x=>x.andar), ''],
+        ['Tipologia', x=>esc(x.tipologia||'—'), u.some(x=>x.tipologia), ''],
+        ['Dorm.', x=>(x.dormitorios||'—')+(x.suites?' ('+x.suites+' suíte'+(x.suites>1?'s':'')+')':''), u.some(x=>x.dormitorios), 'num'],
+        ['Vagas', x=>x.vagas||'—', u.some(x=>x.vagas), 'num'],
+        ['Posição', x=>esc(x.posicao||'—'), u.some(x=>x.posicao), ''],
+        ['Valor', x=>`<b>${x.valor?brl(x.valor):'—'}</b>`, true, 'num']].filter(c=>c[2]);
+       return `<div class="tbl-wrap"><table><thead><tr>${col.map(c=>`<th>${c[0]}</th>`).join('')}<th>Situação</th><th></th></tr></thead><tbody>
+        ${lista.map(x=>`<tr>${col.map(c=>`<td class="${c[3]}">${c[1](x)}</td>`).join('')}
+          <td><select data-lancunst="${x.id}" style="${campo};padding:5px 8px;width:auto;font-size:12.5px">${STATUS_U.map(st=>`<option ${x.status===st?'selected':''}>${st}</option>`).join('')}</select></td>
+          <td style="white-space:nowrap"><button class="btn sm ghost" data-lancun="${x.id}">Editar</button></td></tr>`).join('')
+          || `<tr><td colspan="${col.length+2}" class="muted">Nenhuma unidade com esses filtros.</td></tr>`}
+       </tbody></table></div>`; })()}`      :`<div class="empty">Nenhuma unidade cadastrada. Use <b>📊 Importar tabela</b> para colar a planilha ou enviar o PDF que a construtora mandou.</div>`}</div>
 
   <div class="box" style="margin-top:16px"><div class="row between" style="gap:8px;flex-wrap:wrap;margin-bottom:10px"><h2 style="margin:0">💳 Tabelas de pagamento</h2><button class="btn pri" data-lanctabnovo="${e.id}">+ Nova tabela</button></div>
     ${ts.length?`<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(250px,1fr));gap:12px">${ts.map(t=>{ const soma=(Number(t.entrada_pct)||0)+(Number(t.parcelas_pct)||0)+(Number(t.reforcos_pct)||0)+(Number(t.chaves_pct)||0);
@@ -224,25 +234,54 @@ const carregaPDF = () => pdfP || (pdfP = new Promise((ok,nok)=>{ if(window.pdfjs
   s.onerror=()=>{ pdfP=null; nok(new Error('Não consegui carregar o leitor de PDF. Tente copiar e colar a tabela.')); }; document.head.appendChild(s); }));
 async function lerPDF(file){
   const lib=await carregaPDF(), doc=await lib.getDocument({data:await file.arrayBuffer()}).promise, linhas=[];
-  for(let p=1;p<=Math.min(doc.numPages,25);p++){
-    const tc=await (await doc.getPage(p)).getTextContent(), ys={};
-    tc.items.forEach(it=>{ if(!String(it.str).trim()) return; const k=Math.round(it.transform[5]/3)*3; (ys[k]=ys[k]||[]).push({x:it.transform[4], w:it.width||0, s:it.str}); });
-    Object.keys(ys).map(Number).sort((a,b)=>b-a).forEach(k=>{ const cs=ys[k].sort((a,b)=>a.x-b.x), out=[]; let last=null;
-      cs.forEach(c=>{ if(last && c.x-(last.x+last.w) < 6){ last.s+=c.s; last.w=c.x+c.w-last.x; } else { last={...c}; out.push(last); } });
-      const arr=out.map(o=>o.s.trim()).filter((x,i,a)=>x!==''||i<a.length-1);
-      if(arr.length>1) linhas.push(arr); });
+  for(let p=1;p<=Math.min(doc.numPages,40);p++){
+    const tc=await (await doc.getPage(p)).getTextContent(), its=[];
+    tc.items.forEach(it=>{ const s=String(it.str||'').trim(); if(!s) return;
+      its.push({y:it.transform[5], x:it.transform[4], w:it.width||0, h:Math.abs(it.transform[3])||8, s}); });
+    /* junta por linha de verdade: a mesma linha costuma variar um pouco de altura */
+    its.sort((a,b)=> b.y-a.y || a.x-b.x);
+    const gs=[]; let g=null;
+    its.forEach(i=>{ if(g && Math.abs(g.y-i.y) <= Math.max(2.5, i.h*0.6)) g.cs.push(i); else { g={y:i.y, cs:[i]}; gs.push(g); } });
+    gs.forEach(gr=>{ const cs=gr.cs.sort((a,b)=>a.x-b.x), out=[]; let last=null;
+      cs.forEach(c=>{ if(last && c.x-(last.x+last.w) < 4){ last.s=(last.s+' '+c.s).trim(); last.w=c.x+c.w-last.x; } else { last={x:c.x,w:c.w,s:c.s}; out.push(last); } });
+      if(out.length) linhas.push(out.map(o=>({x1:o.x, x2:o.x+Math.max(o.w,1), s:o.s}))); });
   }
   if(!linhas.length) throw new Error('Esse PDF parece ser uma imagem escaneada. Copie a tabela da planilha ou peça o arquivo em Excel.');
-  return linhas;
+  return gradear(linhas);
+}
+/* alinha as células pelas colunas do PDF: cada incorporadora monta a tabela de um jeito,
+   e muitas linhas vêm com uma coluna a mais ou a menos — só a posição na página diz a verdade */
+function gradear(linhas){
+  const ehDado = l => l.length>=4 && l.filter(c=>/\d/.test(c.s)).length>=3;
+  const dados = linhas.filter(ehDado);
+  if(dados.length<3) return linhas.map(l=>l.map(c=>c.s));
+  /* a tabela principal é a forma de linha que mais se repete; blocos extras (kits, resumos) ficam de fora da grade */
+  const freq={}; dados.forEach(l=>freq[l.length]=(freq[l.length]||0)+1);
+  const comum = Number(Object.entries(freq).sort((a,b)=>b[1]-a[1]||b[0]-a[0])[0][0]);
+  const base = dados.filter(l=>l.length>=comum*0.7) ;
+  const iv=[]; (base.length>=3?base:dados).forEach(l=>l.forEach(c=>iv.push([c.x1,c.x2])));
+  iv.sort((a,b)=>a[0]-b[0]);
+  const fx=[]; let cur=null;
+  iv.forEach(([a,b])=>{ if(cur && a<=cur[1]+1){ if(b>cur[1]) cur[1]=b; } else { cur=[a,b]; fx.push(cur); } });
+  if(fx.length<2) return linhas.map(l=>l.map(c=>c.s));
+  const onde = c => { let i=-1, ov=0;
+    fx.forEach((f,k)=>{ const o=Math.min(c.x2,f[1])-Math.max(c.x1,f[0]); if(o>ov){ ov=o; i=k; } });
+    if(i<0){ let d=1e9; fx.forEach((f,k)=>{ const dd=Math.min(Math.abs(c.x1-f[1]), Math.abs(f[0]-c.x2)); if(dd<d){ d=dd; i=k; } }); }
+    return i; };
+  return linhas.map(l=>{ const out=new Array(fx.length).fill('');
+    l.forEach(c=>{ const i=onde(c); out[i] = out[i] ? out[i]+' '+c.s : c.s; }); return out; });
 }
 
 /* ---------- de-para das colunas ---------- */
-const CAMPOS = [['','— ignorar —'],['torre','Torre / bloco'],['unidade','Unidade'],['andar','Andar'],['tipologia','Tipologia / planta'],
-  ['area','Área (m²)'],['dormitorios','Dormitórios'],['suites','Suítes'],['vagas','Vagas'],['posicao','Posição / sol'],['valor','Valor'],['status','Situação'],['obs','Observação']];
+const CAMPOS = [['','— ignorar —'],['torre','Torre / quadra'],['unidade','Unidade / lote'],['andar','Andar'],['tipologia','Tipologia / planta'],
+  ['area','Área privativa (m²)'],['area_terreno','Área do terreno (m²)'],['dormitorios','Dormitórios'],['suites','Suítes'],['vagas','Vagas'],
+  ['posicao','Posição / sol'],['valor','Valor'],['status','Situação'],['obs','Observação']];
+const IGN = /r\$\s*\/|\/\s*m[²2]|por\s*m[²2]|^%|^qtd|qtde/i;
 const REGRAS = [['torre',/torre|bloco|quadra|edif/i],['unidade',/unid|apt|apart|^un\b|casa|lote|n[ºo°]/i],['andar',/andar|pavim/i],
-  ['suites',/su[íi]te/i],['dormitorios',/dorm|quarto/i],['area',/[áa]rea|m²|m2|priv|[úu]til/i],['vagas',/vaga|garag/i],
-  ['posicao',/posi[çc]|sol|face|frente|vista/i],['valor',/valor|pre[çc]o|tabela|r\$|venda/i],['status',/status|situa|disponib/i],
-  ['tipologia',/tipo|planta|final/i],['obs',/obs|coment/i]];
+  ['suites',/su[íi]te/i],['dormitorios',/dorm|quarto/i],['area_terreno',/terreno/i],['area',/[áa]rea|m[²2]|priv|[úu]til|constru/i],
+  ['vagas',/vaga|garag/i],['posicao',/posi[çc]|sol|face|frente|vista/i],
+  ['valor',/valor\s*(de\s*)?(tabela|venda|total)|tabela\s*(atual|de\s*venda)|pre[çc]o|^valor$|venda/i],
+  ['status',/status|situa|disponib/i],['tipologia',/tipo|planta|final/i],['obs',/obs|coment/i]];
 function detectar(linhas){
   let hi=0, melhor=0;
   linhas.slice(0,15).forEach((l,i)=>{ const n=l.filter(c=>REGRAS.some(r=>r[1].test(c))).length; if(n>melhor){ melhor=n; hi=i; } });
@@ -250,25 +289,79 @@ function detectar(linhas){
   const cab = hi>=0 ? linhas[hi] : [];
   const nc = Math.max(1, ...linhas.slice(0,30).map(l=>l.length));
   const map=[], usado=new Set();
-  for(let i=0;i<nc;i++){ const t=String(cab[i]||''); let f='';
-    for(const [k,re] of REGRAS){ if(usado.has(k)) continue; if(re.test(t)){ f=k; break; } }
+  for(let i=0;i<nc;i++){ const t=String(cab[i]||'').trim(); let f='';
+    if(!IGN.test(t)) for(const [k,re] of REGRAS){ if(usado.has(k)) continue; if(re.test(t)){ f=k; break; } }
     if(f) usado.add(f); map.push(f); }
+  /* nenhuma coluna de valor achada: usa a de números grandes (a tabela de preço) */
+  if(hi>=0 && !usado.has('valor')){
+    let melhor=-1, mx=0;
+    for(let i=0;i<nc;i++){ if(map[i]||IGN.test(String(cab[i]||''))) continue;
+      const vs=linhas.slice(hi+1,hi+25).map(l=>numPT(l[i])).filter(v=>v&&v>10000);
+      if(vs.length>mx){ mx=vs.length; melhor=i; } }
+    if(melhor>=0) map[melhor]='valor';
+  }
   return {hi, map, nc};
 }
 function montar(linhas, hi, map){
-  const out=[];
-  linhas.slice(hi+1).forEach(l=>{
+  const out=[], corpo=linhas.slice(hi+1);
+  const cheias = l => l.filter(c=>String(c||'').trim()!=='').length;
+  const freq={}; corpo.forEach(l=>{ const n=cheias(l); if(n>=3) freq[n]=(freq[n]||0)+1; });
+  const alvo = Object.keys(freq).length ? Number(Object.entries(freq).sort((a,b)=>b[1]-a[1]||b[0]-a[0])[0][0]) : 0;
+  const minimo = alvo ? Math.max(2, Math.floor(alvo*0.6)) : 0;
+  corpo.forEach(l=>{
+    if(cheias(l) < minimo) return;           /* linha de outro bloco (kit, resumo, observação) */
     const o={}; map.forEach((f,i)=>{ if(f) o[f]=l[i]!=null?String(l[i]).trim():''; });
     if(!o.unidade && !o.valor) return;
+    if(/^(lote|unidade|unid|apto|apartamento|quadra|torre|casa|bloco|total|m[²2])$/i.test(String(o.unidade||'').trim())) return;
     const it={ torre:o.torre||null, unidade:o.unidade||null, andar:o.andar||null, tipologia:o.tipologia||null, posicao:o.posicao||null,
-      area:numPT(o.area), dormitorios:numPT(o.dormitorios)!=null?Math.round(numPT(o.dormitorios)):null,
+      area_terreno:numPT(o.area_terreno), area:numPT(o.area), dormitorios:numPT(o.dormitorios)!=null?Math.round(numPT(o.dormitorios)):null,
       suites:numPT(o.suites)!=null?Math.round(numPT(o.suites)):null, vagas:numPT(o.vagas)!=null?Math.round(numPT(o.vagas)):null,
       valor:numPT(o.valor), status:stUn(o.status)||'Disponível', obs:o.obs||null };
-    if(!it.unidade && !it.valor) return;
     if(it.valor!=null && it.valor<1000) it.valor=null;
+    if(!it.valor && !/\d/.test(String(it.unidade||''))) return;
     out.push(it);
   });
   return out;
+}
+
+/* muitas construtoras mandam a condição de pagamento dentro da própria tabela (% / Qtd / VALOR) */
+function acharPagamento(linhas, hi, nomeArq){
+  if(hi<0 || !linhas[hi]) return null;
+  const cab=linhas[hi].map(c=>String(c||'').trim());
+  const corpo=linhas.slice(hi+1).filter(l=>l.filter(c=>/\d/.test(String(c||''))).length>=4);
+  if(corpo.length<3) return null;
+  const moda=i=>{ const c={}; corpo.forEach(l=>{ const v=String(l[i]||'').trim(); if(v) c[v]=(c[v]||0)+1; });
+    const e=Object.entries(c).sort((a,b)=>b[1]-a[1])[0]; return (e && e[1]>=corpo.length*0.5) ? e[0] : null; };
+  /* linha de rótulos dos grupos (SINAL | MENSAIS | SEMESTRAIS | FINANCIAMENTO), e não o título da página */
+  const chaves=[/sinal/i,/\bato\b/i,/entrada/i,/mensa/i,/semestr/i,/anual/i,/financ/i,/chaves/i,/saldo/i,/refor/i];
+  let rot=[], nrot=0;
+  linhas.slice(0,hi).forEach(l=>{ if(l.filter(c=>String(c||'').trim()).length<2) return;
+    const n=chaves.filter(re=>l.some(c=>re.test(String(c||'')))).length; if(n>nrot){ nrot=n; rot=l; } });
+  const prox=i=>{ for(let j=i+1;j<cab.length;j++) if(/^%/.test(cab[j])) return j; return cab.length; };
+  const gs=[];
+  cab.forEach((t,i)=>{ if(!/^%/.test(t)) return;
+    const p=numPT(moda(i)); if(p==null || p<=0 || p>100) return;
+    const fim=prox(i); let qtd=null, nome='';
+    for(let j=i+1;j<fim;j++){ if(/qtd|qtde|parcel|vezes|n[º°o]/i.test(cab[j])){ const q=numPT(moda(j)); if(q>0) qtd=Math.round(q); } }
+    for(let j=i;j<=fim && j<rot.length;j++){ const v=String(rot[j]||'').trim(); if(v && /[a-zç]/i.test(v) && !/^(%|qtd|valor)$/i.test(v)){ nome=v; break; } }
+    gs.push({pct:p, qtd, nome}); });
+  if(gs.length<2) return null;
+  const pega=(re, cond)=>{ const i=gs.findIndex(g=>!g.usado && (re.test(g.nome||'') || (cond && cond(g)))); if(i<0) return null; gs[i].usado=true; return gs[i]; };
+  const ent=pega(/sinal|ato|entrada/i, g=>!g.qtd && gs.indexOf(g)===0);
+  const men=pega(/mensa|parcel/i, g=>!!g.qtd);
+  const ref=pega(/semestr|anual|refor|bal[ãa]o|intermedi/i, g=>!!g.qtd);
+  const chv=pega(/financ|chaves|saldo|repasse|entrega/i, g=>!g.qtd);
+  if(!ent && !men) return null;
+  const txt=linhas.map(l=>l.join(' ')).join(' ');
+  const ind=(txt.match(/INCC[-\s]?FGV|INCC|IGP-?M|IPCA|CUB/i)||[])[0];
+  const vg=txt.match(/\b(\d{2})\/(\d{2})\/(\d{4})\b/);
+  const soma=[ent,men,ref,chv].reduce((a,g)=>a+(g?g.pct:0),0);
+  const nm=String(nomeArq||'').replace(/\.[^.]+$/,'').trim();
+  return { nome:(nm && !/^tabela colada$/i.test(nm)) ? nm.slice(0,60) : 'Condição da tabela importada',
+    entrada_pct: ent?ent.pct:null, parcelas: men?men.qtd:null, parcelas_pct: men?men.pct:null,
+    reforcos: ref?ref.qtd:null, reforcos_pct: ref?ref.pct:null, reforco_quando: ref&&ref.nome?ref.nome.toLowerCase():null,
+    chaves_pct: chv?chv.pct:null, indice: ind?ind.toUpperCase():null,
+    vigencia: vg?(vg[3]+'-'+vg[2]+'-'+vg[1]):null, soma };
 }
 
 /* ---------- modais ---------- */
@@ -310,7 +403,8 @@ modalHtml = function(){
       <label class="f">Unidade<input id="lu-unid" required value="${esc(x.unidade||'')}" placeholder="Ex.: 204"></label>
       <label class="f">Andar<input id="lu-andar" value="${esc(x.andar||'')}"></label>
       <label class="f">Tipologia<input id="lu-tipo" value="${esc(x.tipologia||'')}" placeholder="Ex.: Final 4"></label>
-      <label class="f">Área (m²)<input id="lu-area" inputmode="decimal" value="${esc(x.area||'')}"></label>
+      <label class="f">Área privativa (m²)<input id="lu-area" inputmode="decimal" value="${esc(x.area||'')}"></label>
+      <label class="f">Área do terreno (m²)<input id="lu-ter" inputmode="decimal" value="${esc(x.area_terreno||'')}"></label>
       <label class="f">Dormitórios<input id="lu-dorm" inputmode="numeric" value="${esc(x.dormitorios||'')}"></label>
       <label class="f">Suítes<input id="lu-su" inputmode="numeric" value="${esc(x.suites||'')}"></label>
       <label class="f">Vagas<input id="lu-vagas" inputmode="numeric" value="${esc(x.vagas||'')}"></label>
@@ -362,6 +456,8 @@ modalHtml = function(){
           <span class="pill ${prev.length?'p-ok':'p-bad'}">${prev.length} unidade${prev.length===1?'':'s'} reconhecida${prev.length===1?'':'s'}</span>
           ${prev.length?`<span class="pill p-mute">${prev.filter(x=>x.status==='Disponível').length} disponíveis</span>${prev.filter(x=>x.valor).length?`<span class="pill p-mute">Valores de ${brl(Math.min(...prev.filter(x=>x.valor).map(x=>x.valor)))} a ${brl(Math.max(...prev.filter(x=>x.valor).map(x=>x.valor)))}</span>`:'<span class="pill p-warn">Nenhum valor reconhecido</span>'}`:''}</div>
         <label class="full" style="display:flex;gap:10px;align-items:center;cursor:pointer;margin-top:10px"><input type="checkbox" id="li-sub" ${I.sub!==false?'checked':''} style="width:20px;height:20px;accent-color:var(--accent)"> <b>Substituir a lista atual</b> <span class="muted" style="font-size:12.5px">(desmarque para só atualizar e incluir)</span></label>
+        ${I.pag?`<label class="full" style="display:flex;gap:10px;align-items:flex-start;cursor:pointer;margin-top:10px;border:1px solid var(--accent);background:var(--accent-soft);border-radius:12px;padding:10px 12px"><input type="checkbox" id="li-pag" ${I.pagOk!==false?'checked':''} style="width:20px;height:20px;accent-color:var(--accent);flex:none;margin-top:1px">
+          <span><b>Criar também a tabela de pagamento que veio na tabela</b><br><span style="font-size:13px">${[I.pag.entrada_pct?pct(I.pag.entrada_pct)+' de entrada':'', I.pag.parcelas?I.pag.parcelas+'x mensais ('+pct(I.pag.parcelas_pct)+')':'', I.pag.reforcos?I.pag.reforcos+' '+(I.pag.reforco_quando||'reforços')+' ('+pct(I.pag.reforcos_pct)+')':'', I.pag.chaves_pct?pct(I.pag.chaves_pct)+' no financiamento':''].filter(Boolean).map(esc).join(' · ')}${I.pag.indice?' · '+esc(I.pag.indice):''}</span>${Math.abs((I.pag.soma||0)-100)>0.6?`<br><span class="pill p-warn" style="margin-top:4px">Os percentuais somam ${pct(I.pag.soma)}</span>`:''}</span></label>`:''}
         ${I.file?`<label class="full" style="display:flex;gap:10px;align-items:center;cursor:pointer;margin-top:6px"><input type="checkbox" id="li-guardar" checked style="width:20px;height:20px;accent-color:var(--accent)"> Guardar o arquivo original em Arquivos da construtora</label>`:''}</div>`}
      </div>
      <div class="m-f"><button type="button" class="btn" data-mclose="1">Cancelar</button>${I.linhas?`<button class="btn pri" type="submit" ${prev.length?'':'disabled'}>Importar ${prev.length||''} unidades</button>`:''}</div></form></div>`; }
@@ -370,7 +466,7 @@ modalHtml = function(){
 };
 
 /* ---------- eventos ---------- */
-function reconhecer(){ const I=S.imp; if(!I||!I.linhas) return; I.itens=montar(I.linhas, I.hi, I.map); }
+function reconhecer(){ const I=S.imp; if(!I||!I.linhas) return; I.itens=montar(I.linhas, I.hi, I.map); if(I.pag===undefined) I.pag=acharPagamento(I.linhas, I.hi, I.nome); }
 async function lerTabela(file){
   const n=(file.name||'').toLowerCase();
   if(/\.pdf$/.test(n)) return {linhas: await lerPDF(file), nome:file.name};
@@ -417,6 +513,7 @@ document.addEventListener('change', e=>{
   if(id==='lanc-simun'){ L().sim.un=el.value; return render(); }
   if(id==='lanc-simtab'){ L().sim.tab=el.value; return render(); }
   if(id==='li-sub'){ (S.imp||{}).sub=el.checked; return; }
+  if(id==='li-pag'){ (S.imp||{}).pagOk=el.checked; return; }
   if(d && d.limpcol!==undefined){ const I=S.imp; if(!I) return; I.map[+d.limpcol]=el.value; reconhecer(); return render(); }
   if(d && d.lancunst){ const nv=el.value; e.stopImmediatePropagation();
     return acao(async()=>{ await q(sb.from('lanc_unidades').update({status:nv, atualizado_em:new Date().toISOString()}).eq('id',d.lancunst)); }, 'Unidade '+nv.toLowerCase()); }
@@ -445,7 +542,7 @@ document.addEventListener('submit', e=>{
       S.modal=null; }, id?'Dados salvos ✓':'Empreendimento criado ✓'); }
 
   if(f.id==='f-lancun'){ e.preventDefault(); e.stopImmediatePropagation();
-    const dados={torre:v('lu-torre')||null, unidade:v('lu-unid'), andar:v('lu-andar')||null, tipologia:v('lu-tipo')||null, area:numPT(v('lu-area')),
+    const dados={torre:v('lu-torre')||null, unidade:v('lu-unid'), andar:v('lu-andar')||null, tipologia:v('lu-tipo')||null, area:numPT(v('lu-area')), area_terreno:numPT(v('lu-ter')),
       dormitorios:n0(v('lu-dorm')), suites:n0(v('lu-su')), vagas:n0(v('lu-vagas')), posicao:v('lu-pos')||null, valor:numPT(v('lu-valor')),
       status:v('lu-st'), obs:v('lu-obs')||null, atualizado_em:new Date().toISOString()};
     const id=f.dataset.id, emp_id=f.dataset.emp;
@@ -467,10 +564,13 @@ document.addEventListener('submit', e=>{
     const sub=(f.querySelector('#li-sub')||{}).checked!==false, guardar=(f.querySelector('#li-guardar')||{}).checked;
     return acao(async()=>{
       const r=await q(sb.rpc('lanc_importar',{p_emp:emp_id, p_itens:itens, p_substituir:sub}));
+      if(I.pag && (f.querySelector('#li-pag')||{}).checked){ const p=Object.assign({}, I.pag); delete p.soma;
+        await q(sb.from('lanc_tabelas').insert(Object.assign({empreendimento_id:emp_id, ordem:(tabs(emp_id).length+1)*10}, p))); }
       if(guardar && I.file){ const path=`lancamentos/${emp_id}/${Date.now()}-${I.file.name.normalize('NFD').replace(/[̀-ͯ]/g,'').replace(/[^\w.-]+/g,'_')}`;
         const up=await sb.storage.from('modelos').upload(path, I.file, {contentType:I.file.type||'application/octet-stream'});
         if(!up.error) await q(sb.from('lanc_arquivos').insert({empreendimento_id:emp_id, titulo:I.file.name.replace(/\.[^.]+$/,''), tipo:'Tabela de preços', path, nome_arquivo:I.file.name, mime:I.file.type||null, tamanho:I.file.size, criado_por:S.me.nome})); }
       S.modal=null; S.imp=null;
       setTimeout(()=>toast(`${r.incluidas} incluídas${r.atualizadas?', '+r.atualizadas+' atualizadas':''}${r.removidas?', '+r.removidas+' substituídas':''}`), 1200); }, 'Tabela importada ✓'); }
 }, true);
+window.__lancDbg = {lerPDF, lerCSV, lerXLSX, detectar, montar, numPT, acharPagamento};
 })();
