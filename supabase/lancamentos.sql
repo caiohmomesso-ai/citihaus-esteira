@@ -18,12 +18,13 @@ create table if not exists public.lanc_unidades (
   id uuid primary key default gen_random_uuid(),
   empreendimento_id uuid not null references public.empreendimentos(id) on delete cascade,
   torre text, unidade text, andar text, tipologia text,
-  area numeric, dormitorios int, suites int, vagas int, posicao text,
+  area numeric, area_terreno numeric, dormitorios int, suites int, vagas int, posicao text,
   valor numeric,
   status text not null default 'Disponível' check (status in ('Disponível','Reservada','Vendida','Permuta','Bloqueada')),
   obs text, ordem int not null default 0,
   atualizado_em timestamptz not null default now(), created_at timestamptz not null default now());
 create index if not exists lanc_un_emp on public.lanc_unidades(empreendimento_id, ordem);
+alter table public.lanc_unidades add column if not exists area_terreno numeric;
 
 create table if not exists public.lanc_tabelas (
   id uuid primary key default gen_random_uuid(),
@@ -79,7 +80,8 @@ begin
     if achou is not null then
       update public.lanc_unidades set
         andar = coalesce(nullif(it->>'andar',''), andar), tipologia = coalesce(nullif(it->>'tipologia',''), tipologia),
-        area = coalesce((it->>'area')::numeric, area), dormitorios = coalesce((it->>'dormitorios')::int, dormitorios),
+        area = coalesce((it->>'area')::numeric, area), area_terreno = coalesce((it->>'area_terreno')::numeric, area_terreno),
+        dormitorios = coalesce((it->>'dormitorios')::int, dormitorios),
         suites = coalesce((it->>'suites')::int, suites), vagas = coalesce((it->>'vagas')::int, vagas),
         posicao = coalesce(nullif(it->>'posicao',''), posicao), valor = coalesce((it->>'valor')::numeric, valor),
         status = coalesce(nullif(it->>'status',''), status), obs = coalesce(nullif(it->>'obs',''), obs),
@@ -87,9 +89,9 @@ begin
        where id = achou;
       n_upd := n_upd + 1;
     else
-      insert into public.lanc_unidades (empreendimento_id, torre, unidade, andar, tipologia, area, dormitorios, suites, vagas, posicao, valor, status, obs, ordem)
+      insert into public.lanc_unidades (empreendimento_id, torre, unidade, andar, tipologia, area, area_terreno, dormitorios, suites, vagas, posicao, valor, status, obs, ordem)
       values (p_emp, nullif(trim(it->>'torre'),''), nullif(trim(it->>'unidade'),''), nullif(trim(it->>'andar'),''), nullif(trim(it->>'tipologia'),''),
-              (it->>'area')::numeric, (it->>'dormitorios')::int, (it->>'suites')::int, (it->>'vagas')::int, nullif(trim(it->>'posicao'),''),
+              (it->>'area')::numeric, (it->>'area_terreno')::numeric, (it->>'dormitorios')::int, (it->>'suites')::int, (it->>'vagas')::int, nullif(trim(it->>'posicao'),''),
               (it->>'valor')::numeric, coalesce(nullif(trim(it->>'status'),''),'Disponível'), nullif(trim(it->>'obs'),''), i);
       n_ins := n_ins + 1;
     end if;
