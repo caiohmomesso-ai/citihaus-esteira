@@ -4,7 +4,7 @@ if(TOKEN) return;
 const G = [
   {k:'inicio', n:'🏠 Início',      subs:[{t:'agenda'}]},
   {k:'dash',   n:'📊 Dashboard',   subs:[{t:'dashboard'}]},
-  {k:'com',    n:'🤝 Comercial',   subs:[{t:'captacoes',n:'🏠 Captação'},{t:'contratos',sec:'comercial',n:'🤝 Negócios'},{t:'imoveis',n:'🏢 Imóveis'}]},
+  {k:'com',    n:'🤝 Comercial',   subs:[{t:'captacoes',n:'🏠 Captação'},{t:'contratos',sec:'comercial',n:'🤝 Negócios'},{t:'imoveis',n:'🏢 Imóveis'},{t:'lancamentos',n:'🏗️ Lançamentos'}]},
   {k:'loc',    n:'📄 Locação',     subs:[{t:'contratos',sec:'contratos',n:'📄 Contratos em andamento'},{t:'contratos',sec:'ativos',n:'🔑 Imóveis ativos'},{t:'contratos',sec:'desoc',n:'🚚 Desocupação'}]},
   {k:'at',     n:'🎫 Atendimento', subs:[{t:'contratos',sec:'chamados'}]},
   {k:'docs',   n:'📚 Documentos',  subs:[{t:'docs'}]},
@@ -27,7 +27,7 @@ render = function(){
   if(primeira){ primeira=false; if(!(location.hash||'').slice(1) && S.tab!=='agenda'){ S.tab='agenda'; return render(); } }
   const nav=document.querySelector('#app nav.sub'); if(!nav) return;
   /* abas que a pessoa pode ver (as camadas anteriores já tiraram as bloqueadas) */
-  const ok=new Set([...nav.querySelectorAll('[data-tab]')].map(b=>b.dataset.tab)); ok.add('agenda'); ok.add('docs');
+  const ok=new Set([...nav.querySelectorAll('[data-tab]')].map(b=>b.dataset.tab)); ok.add('agenda'); ok.add('docs'); ok.add('lancamentos');
   const badge = t => { const b=nav.querySelector(`[data-tab="${t}"] .tabn`); return b?Number(b.textContent)||0:0; };
   const nCh = D.chamados.filter(h=>h.status!=='resolvido' && !h.arquivado_em).length;
   const gBadge = {inicio:badge('agenda'), com:badge('captacoes'), at:nCh, cad:badge('whatsapp')};
