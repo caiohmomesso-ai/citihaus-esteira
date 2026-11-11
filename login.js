@@ -5,7 +5,7 @@ const cel = t => { let d=String(t||'').replace(/\D/g,''); if(d.length===13 && d.
 const fmtCel = t => { const d=cel(t); return d.length===11?`(${d.slice(0,2)}) ${d.slice(2,7)}-${d.slice(7)}`:d.length===10?`(${d.slice(0,2)}) ${d.slice(2,6)}-${d.slice(6)}`:t; };
 const gerarSenha = () => { const a='abcdefghjkmnpqrstuvwxyz23456789'; let s=''; const r=crypto.getRandomValues(new Uint32Array(8)); r.forEach(n=>s+=a[n%a.length]); return s; };
 const urlSite = () => location.origin + location.pathname;
-const msgAcesso = (nome, tel, senha, cliente) => `Olá${nome?', '+nome.split(' ')[0]:''}! ${cliente?'Este é o seu acesso ao portal da Citihaus, onde você acompanha o seu contrato, envia documentos e abre chamados.':'Este é o seu acesso à Esteira de Contratos da Citihaus.'}\n\nSite: ${urlSite()}\nCelular: ${fmtCel(tel)}\nSenha: ${senha}`;
+const msgAcesso = (nome, tel, senha, cliente) => `Olá${nome?', '+nome.split(' ')[0]:''}! ${cliente?'Seu acesso ao Citihaus+ está pronto 🧡\nLá você acompanha seu imóvel, contrato, visitas e propostas, e fala com a gente.':'Este é o seu acesso ao sistema da Citihaus.'}\n\nSite: ${urlSite()}\nCelular: ${fmtCel(tel)}\nSenha: ${senha}${cliente?'\n\nDepois de entrar, você pode trocar a senha em "Meus dados".':''}`;
 const LS = {setup:false, lista:null, eq:null};
 
 /* ---------- tela de login ---------- */

@@ -233,3 +233,6 @@ a.doclink{color:inherit;text-decoration:none}
 a.doclink:hover{text-decoration:underline}
 .sending{opacity:.6;pointer-events:none}
 .top-portal .top-in{justify-content:space-between}
+
+/* celular: menu principal quebra em linhas em vez de cortar */
+@media (max-width:760px){.sub{flex-wrap:wrap;overflow-x:visible;gap:2px}.sub button{flex:1 1 auto}}

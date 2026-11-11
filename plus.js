@@ -168,6 +168,20 @@ function homeHtml(){
       <p class="muted" style="font-size:12px;margin:10px 0 0">Você envia uma vez e a Citihaus reaproveita nos próximos contratos.</p></div>
   </div>`;
 }
+const RESP_P = {'Aprovada':'Proposta aprovada ✅','Quero aceitar':'Proposta aprovada ✅','Contraproposta':'Contraproposta enviada 🔁','Não aceito':'Proposta recusada','Quero conversar':'Quero conversar'};
+function propForm(p){
+  const m = X.pp && X.pp.id===p.id ? X.pp.modo : '';
+  const inp='border:1px solid var(--line);border-radius:10px;padding:10px 12px;background:var(--bg);color:inherit;font:inherit;width:100%;box-sizing:border-box';
+  if(!m) return `<div style="margin-top:10px"><div class="muted" style="font-size:12.5px;margin-bottom:6px">O que você quer fazer com esta proposta?</div>
+    <div class="row" style="gap:6px;flex-wrap:wrap"><button class="btn pri sm" data-ppmodo="Aprovada|${p.id}">✅ Aprovar</button><button class="btn sm" data-ppmodo="Contraproposta|${p.id}">🔁 Fazer contraproposta</button><button class="btn sm ghost" data-ppmodo="Não aceito|${p.id}">✋ Recusar</button></div></div>`;
+  const tit = m==='Aprovada' ? '✅ Aprovar a proposta de '+brl(p.valor)+(p.tipo==='Locação'?' por mês':'')+'?' : m==='Contraproposta' ? '🔁 Sua contraproposta' : '✋ Recusar esta proposta?';
+  const sub = m==='Aprovada' ? 'A Citihaus é avisada na hora e segue com o fechamento.' : m==='Contraproposta' ? 'Diga o valor que você aceita. A Citihaus leva ao interessado e volta com a resposta.' : 'A Citihaus avisa o interessado. Se quiser, conte o motivo.';
+  return `<form class="pprop" data-id="${p.id}" data-st="${m}" style="margin-top:10px;display:grid;gap:8px;border:1px solid var(--accent);background:var(--accent-soft);border-radius:12px;padding:12px">
+    <b>${tit}</b><span class="muted" style="font-size:12.5px">${sub}</span>
+    ${m==='Contraproposta'?`<label style="font-size:12.5px;font-weight:700">Valor que você aceita (R$)${p.tipo==='Locação'?' por mês':''}<input name="v" inputmode="decimal" required placeholder="Ex.: ${String(Math.round(Number(p.valor||0)*1.05)).replace(/\B(?=(\d{3})+(?!\d))/g,'.')}" style="${inp};margin-top:4px;font-size:17px;font-weight:700"></label>`:''}
+    <input name="obs" placeholder="${m==='Contraproposta'?'Condições (opcional): prazo, garantia, data de entrada…':'Comentário para a Citihaus (opcional)'}" style="${inp}">
+    <div class="row" style="gap:6px;flex-wrap:wrap"><button class="btn pri sm" type="submit">${m==='Aprovada'?'Confirmar aprovação':m==='Contraproposta'?'Enviar contraproposta':'Confirmar recusa'}</button><button class="btn sm ghost" type="button" data-ppmodo="|${p.id}">Voltar</button></div></form>`;
+}
 function capHtml(){
   const it=itens().find(x=>x.k===X.capId); if(!it){ X.view='home'; return homeHtml(); }
   const cp=it.cap, f=cp?cp.ficha:{}, et=cp?cp.etapa:5;
@@ -190,9 +204,8 @@ function capHtml(){
       return `<div style="padding:10px 0;border-bottom:1px solid var(--line)"><div class="row between"><b style="font-family:var(--f-display);font-size:17px">${brl(p.valor)}${p.tipo==='Locação'?' <small>/mês</small>':''}</b><span class="pill ${s[0]}">${s[1]}</span></div>
         <div class="muted" style="font-size:12.5px">${esc(p.tipo)} · ${dataBR(p.data)}</div>
         ${p.condicoes?`<div style="font-size:13.5px;margin-top:4px">${esc(p.condicoes)}</div>`:''}
-        ${p.status_prop?`<div class="ok-c" style="margin-top:8px">Sua resposta: <b>${esc(p.status_prop)}</b>${p.resposta_prop?' · “'+esc(p.resposta_prop)+'”':''}</div>`:''}
-        ${aberta?`<form class="pprop" data-id="${p.id}" style="margin-top:8px;display:grid;gap:8px"><input name="obs" placeholder="Comentário para a Citihaus (opcional)" style="border:1px solid var(--line);border-radius:10px;padding:9px 12px;background:var(--bg);font:inherit">
-          <div class="row" style="gap:6px;flex-wrap:wrap"><button class="btn pri sm" name="st" value="Quero aceitar">👍 Quero aceitar</button><button class="btn sm" name="st" value="Quero conversar">💬 Quero conversar</button><button class="btn sm ghost" name="st" value="Não aceito">✋ Não aceito</button></div></form>`:''}
+        ${p.status_prop?`<div class="ok-c" style="margin-top:8px">Sua resposta: <b>${esc(RESP_P[p.status_prop]||p.status_prop)}</b>${p.resposta_prop?' · '+esc(p.resposta_prop):''}</div>`:''}
+        ${aberta?propForm(p):''}
       </div>`; }).join('')
       :'<p class="muted" style="margin:0">As propostas recebidas pelo seu imóvel aparecem aqui para você responder.</p>'}</div>`:''}
   ${cp&&cp.etapa<5?'<div class="note" style="margin-top:4px">🧡 Quando a captação terminar e o anúncio for publicado, aqui aparecem as visitas, as propostas e os pedidos sobre o anúncio.</div>':''}`;
@@ -258,12 +271,16 @@ document.addEventListener('click', e=>{
   if(d.pxsair){ e.stopImmediatePropagation(); const s=ses(); setSes(null); try{ localStorage.removeItem('citihaus_cli'); }catch(_){} sb.rpc('plus_sair',{p_sessao:s}).then(()=>{},()=>{}); X.d=null; loginOrig(); return; }
 }, true);
 document.addEventListener('click', e=>{ const a=e.target.closest('a[data-pcapa]'); if(!a||TOKEN||!X.d) return; e.preventDefault(); e.stopImmediatePropagation(); X.view='cap'; X.capId=a.dataset.pcapa; X.novoTipo=''; plusRender(); const bx=document.getElementById('px-capch'); if(bx) bx.scrollIntoView(); }, true);
+document.addEventListener('click', e=>{ const b=e.target.closest('button[data-ppmodo]'); if(!b||TOKEN||!X.d) return; e.preventDefault(); e.stopImmediatePropagation(); const [m,id]=b.dataset.ppmodo.split('|'); X.pp = m ? {id, modo:m} : null; plusRender(); const v=document.querySelector('form.pprop [name=v]'); if(v) v.focus(); }, true);
 let ultimoBotao=null;
 document.addEventListener('click', e=>{ const b=e.target.closest('form.pprop button[name=st]'); if(b) ultimoBotao=b.value; }, true);
 document.addEventListener('submit', e=>{
   if(TOKEN || !X.d) return; const f=e.target, g=id=>{ const x=f.querySelector('#'+id); return x?x.value.trim():''; };
-  if(f.classList.contains('pprop')){ e.preventDefault(); e.stopImmediatePropagation(); const st=(e.submitter&&e.submitter.value)||ultimoBotao; if(!st) return;
-    (async()=>{ try{ await q(sb.rpc('plus_proposta_resp',{p_sessao:ses(), p_id:f.dataset.id, p_status:st, p_obs:f.querySelector('[name=obs]').value})); toast('Resposta enviada à Citihaus ✓'); await recarregar(); }catch(err){ toast(err.message||String(err)); } })(); return; }
+  if(f.classList.contains('pprop')){ e.preventDefault(); e.stopImmediatePropagation(); const st=f.dataset.st; if(!st) return;
+    const vi=f.querySelector('[name=v]'), val=vi?valorBR(vi.value):null; if(vi && !(val>0)) return toast('Informe o valor da contraproposta');
+    const bt=f.querySelector('[type=submit]'); bt.disabled=true;
+    (async()=>{ try{ await q(sb.rpc('plus_proposta_resp',{p_sessao:ses(), p_id:f.dataset.id, p_status:st, p_obs:f.querySelector('[name=obs]').value, p_valor:val})); X.pp=null;
+      toast(st==='Aprovada'?'Proposta aprovada. A Citihaus já foi avisada ✓':st==='Contraproposta'?'Contraproposta enviada à Citihaus ✓':'Resposta enviada à Citihaus ✓'); await recarregar(); }catch(err){ bt.disabled=false; toast(err.message||String(err)); } })(); return; }
   if(f.classList.contains('pcapch-novo')){ e.preventDefault(); e.stopImmediatePropagation(); const vi=f.querySelector('[name=v]'), v=vi?valorBR(vi.value):null, t=f.querySelector('[name=t]').value.trim();
     if(vi && !v) return toast('Informe o valor'); const bt=f.querySelector('[type=submit]'); bt.disabled=true;
     (async()=>{ try{ const r=await q(sb.rpc('plus_cap_chamado_abrir',{p_sessao:ses(), p_captacao:f.dataset.cap, p_tipo:f.dataset.tipo, p_texto:t, p_valor:v||null})); X.novoTipo=''; toast('Pedido '+(r&&r.protocolo||'')+' enviado à Citihaus ✓'); await recarregar(); }catch(err){ bt.disabled=false; toast(err.message||String(err)); } })(); return; }

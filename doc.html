@@ -1,0 +1,76 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex">
+<title>Documento · Citihaus</title>
+<link rel="icon" href="data:,">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Sora:wght@500;600;700&family=Figtree:wght@400;500;600;700&display=swap">
+<style>
+:root{--laranja:#E85D24;--ambar:#E99220;--escuro:#B8410F;--fundo:#F7F3EF;--papel:#fff;--tinta:#2B2420;--suave:#7A6E66;--linha:#EADFD6}
+@media (prefers-color-scheme: dark){:root{--fundo:#1C1815;--papel:#26211D;--tinta:#F3ECE6;--suave:#B5A89E;--linha:#3A322C;--escuro:#FF9A6B}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--fundo);color:var(--tinta);font:16px/1.55 Figtree,system-ui,sans-serif;padding:16px}
+.folha{max-width:720px;margin:12px auto;background:var(--papel);border-radius:16px;overflow:hidden;box-shadow:0 10px 40px rgba(60,30,10,.10)}
+.topo{background:var(--laranja);color:#fff;padding:20px 28px;display:flex;justify-content:space-between;align-items:baseline;gap:12px;flex-wrap:wrap;border-bottom:4px solid var(--ambar)}
+.topo b{font:700 26px Sora,sans-serif;letter-spacing:-.5px}
+.topo span{font-size:13px;opacity:.95}
+.corpo{padding:26px 28px 30px}
+h1{font:700 22px/1.25 Sora,sans-serif;color:var(--escuro);margin:0 0 6px;text-wrap:balance}
+.meta{color:var(--suave);font-size:14px;margin-bottom:18px;padding-bottom:16px;border-bottom:1px solid var(--linha)}
+.texto{white-space:pre-wrap;overflow-wrap:anywhere;font-size:16px}
+.assina{margin-top:22px;font-weight:700;color:var(--escuro)}
+.assina small{display:block;font-weight:400;color:var(--suave)}
+h2{font:600 15px Sora,sans-serif;margin:26px 0 10px}
+.anexo{display:flex;align-items:center;gap:12px;padding:12px 14px;border:1px solid var(--linha);border-radius:12px;margin-bottom:8px}
+.anexo i{flex:none;width:42px;height:42px;border-radius:10px;background:color-mix(in srgb,var(--laranja) 14%,transparent);color:var(--escuro);font:800 11px Figtree;display:flex;align-items:center;justify-content:center;font-style:normal}
+.anexo div{flex:1;min-width:0;font-weight:600;overflow-wrap:anywhere}
+.btn{appearance:none;border:0;border-radius:999px;background:var(--laranja);color:#fff;font:700 14px Figtree,sans-serif;padding:10px 16px;cursor:pointer;text-decoration:none;white-space:nowrap}
+.btn.sec{background:transparent;color:var(--escuro);border:1px solid var(--linha)}
+.btn:focus-visible{outline:3px solid var(--ambar);outline-offset:2px}
+.acoes{display:flex;gap:8px;flex-wrap:wrap;margin-top:24px}
+.rodape{text-align:center;color:var(--suave);font-size:12.5px;margin:18px 0 8px}
+.aviso{max-width:520px;margin:15vh auto;text-align:center;color:var(--suave)}
+@media print{body{background:#fff;padding:0}.folha{box-shadow:none;border-radius:0;max-width:none}.acoes,.anexo .btn{display:none}.topo{-webkit-print-color-adjust:exact;print-color-adjust:exact}}
+</style>
+</head>
+<body>
+<main id="app"><p class="aviso">Abrindo o documento…</p></main>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
+<script src="config.js?v=9"></script>
+<script>
+const app = document.getElementById('app');
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const ext = n => (String(n||'').split('.').pop()||'').toUpperCase().slice(0,4);
+const T = new URLSearchParams(location.search).get('d');
+(async () => {
+  if(!/^[0-9a-f-]{36}$/i.test(T||'')){ app.innerHTML = '<p class="aviso">Link inválido. Peça um novo à Citihaus pelo WhatsApp ' + esc((window.CFG||{}).WHATSAPP||'') + '.</p>'; return; }
+  const sb = supabase.createClient(CFG.SUPABASE_URL, CFG.SUPABASE_ANON_KEY);
+  const r = await sb.rpc('com_envio', {p_token: T, p_previa: new URLSearchParams(location.search).get('p')==='1'});
+  if(r.error){ app.innerHTML = '<p class="aviso">' + esc(r.error.message) + '</p>'; return; }
+  const d = r.data, an = d.anexos || [];
+  document.title = d.titulo + ' · Citihaus';
+  app.innerHTML = `<article class="folha">
+    <div class="topo"><b>Citihaus</b><span>${new Date(d.data).toLocaleDateString('pt-BR',{day:'2-digit',month:'long',year:'numeric'})}</span></div>
+    <div class="corpo"><h1>${esc(d.titulo)}</h1>
+      <div class="meta">${d.para?'Para: <b>'+esc(d.para)+'</b>':''}${d.para&&d.imovel?' · ':''}${d.imovel?'Imóvel: <b>'+esc(d.imovel)+'</b>':''}</div>
+      <div class="texto">${esc(d.texto)}</div>
+      <div class="assina">${esc(d.remetente||'Citihaus')}<small>Citihaus Negócios Imobiliários</small></div>
+      ${an.length?`<h2>📎 ${an.length>1?an.length+' documentos anexos':'Documento anexo'}</h2>${an.map((a,i)=>`<div class="anexo"><i>${esc(ext(a.nome))||'DOC'}</i><div>${esc(a.titulo)}</div><button class="btn" data-a="${i}">Baixar</button></div>`).join('')}`:''}
+      <div class="acoes"><button class="btn sec" id="imp">🖨️ Imprimir ou salvar em PDF</button><a class="btn sec" href="https://wa.me/55${esc(String(CFG.WHATSAPP||'').replace(/\D/g,''))}" target="_blank" rel="noopener">💬 Falar com a Citihaus</a></div>
+    </div></article>
+    <p class="rodape">Citihaus Imobiliária · CRECI 047221-J · WhatsApp ${esc(CFG.WHATSAPP||'')}</p>`;
+  document.getElementById('imp').onclick = () => window.print();
+  app.addEventListener('click', async e => {
+    const b = e.target.closest('[data-a]'); if(!b) return; const a = an[+b.dataset.a]; b.disabled = true; const t = b.textContent; b.textContent = 'Baixando…';
+    try{ const s = await sb.storage.from('modelos').createSignedUrl(a.path, 300, {download: a.nome || true}); if(s.error) throw s.error; location.href = s.data.signedUrl; }
+    catch(err){ alert('Não foi possível baixar agora. Tente de novo ou fale com a Citihaus.'); }
+    finally{ setTimeout(()=>{ b.disabled = false; b.textContent = t; }, 1500); }
+  });
+})();
+</script>
+</body>
+</html>

@@ -293,7 +293,7 @@ async function log(cid, texto){ await q(sb.from('historico').insert({contrato_id
 function render(){
   if(TOKEN) return;
   topEl.hidden=false; topEl.className='top';
-  topEl.innerHTML=`<div class="wrap top-in"><div class="brand"><img src="${LOGO}" alt="Citihaus"><span>Esteira de Contratos</span></div>
+  topEl.innerHTML=`<div class="wrap top-in"><div class="brand"><img src="${LOGO}" alt="Citihaus"><span>Citihaus+ · Equipe</span></div>
    <div class="seg"><span class="me">${esc(S.me.nome)}</span><button class="btn sm" data-reload="1">Atualizar</button><button class="btn sm ghost" data-sair="1">Sair</button></div></div>`;
   const nab=D.chamados.filter(h=>h.status!=='resolvido').length;
   const tabs=[['contratos','Contratos'],['chamados','Chamados'+(nab?`<span class="tabn">${nab}</span>`:'')],['imoveis','Imóveis'],['pessoas','Pessoas']];
