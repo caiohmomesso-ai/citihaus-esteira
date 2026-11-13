@@ -382,13 +382,14 @@ function parteHtml(c,x){
      <h4 style="margin-top:6px">${esc(nomeP(p,x.papel))}</h4>
      <div class="contact">${p.telefone?`<span>${esc(p.telefone)}</span>`:'<span class="miss">Sem WhatsApp</span>'}${p.email?`<span>${esc(p.email)}</span>`:'<span class="miss">Sem e-mail</span>'}${p.estado_civil?`<span>${esc(p.estado_civil)}</span>`:''}${x.papel==='proprietario'&&p.banco?`<span>${esc(p.banco)}</span>`:''}</div></div>
      <div class="row">${x.aprovado?'<span class="pill p-ok">Ficha aprovada</span>':(c.etapa===1&&ds.every(d=>docSt(x.pessoa_id,d)==='ok')?`<button class="btn sm pri" data-aprov="${x.id}">Aprovar ficha</button>`:'')}
-     <button class="btn sm ghost" data-editp="${p.id}">Editar dados</button></div>
+     <button class="btn sm ghost" data-editp="${p.id}">Editar dados</button>${window.anexosBtn?window.anexosBtn(x):''}</div>
    </div>
-   ${ds.map(t=>{const o=(D.docs[x.pessoa_id]||{})[t]||{status:'pendente'}; const [cl,lb]=tagSt[o.status];
-     return `<div class="doc"><div class="doc-n"><div>${esc(DOC[t])}</div>${o.arquivo?(o.drive_url?`<small><a class="doclink" href="${esc(o.drive_url)}" target="_blank" rel="noopener">${esc(o.arquivo)} ↗</a></small>`:`<small>${esc(o.arquivo)}</small>`):''}${o.obs?`<small style="color:var(--bad);font-family:var(--f-body)">${esc(o.obs)}</small>`:''}</div>
+   ${(window.docsLista?window.docsLista(x,ds):ds).map(t=>{const o=(D.docs[x.pessoa_id]||{})[t]||{status:'pendente'}; const [cl,lb]=tagSt[o.status];
+     return `<div class="doc"><div class="doc-n"><div>${esc(window.docRotulo?window.docRotulo(t):DOC[t])}</div>${o.arquivo?(o.drive_url?`<small><a class="doclink" href="${esc(o.drive_url)}" target="_blank" rel="noopener">${esc(o.arquivo)} ↗</a></small>`:`<small>${esc(o.arquivo)}</small>`):''}${o.obs?`<small style="color:var(--bad);font-family:var(--f-body)">${esc(o.obs)}</small>`:''}</div>
      <div class="row"><span class="pill ${cl}">${lb}</span>
      ${o.status==='enviado'?`<button class="btn sm" data-conf="${o.id}|${c.id}">Conferir</button><button class="btn sm ghost" data-redo="${o.id}|${c.id}">Pedir de novo</button>`:''}
-     ${o.status!=='ok'?`<label class="btn sm ghost up">Anexar<input type="file" data-eup="${x.id}|${t}" accept="image/*,.pdf"></label>`:''}</div></div>`}).join('')}
+     ${o.status!=='ok'?`<label class="btn sm ghost up">Anexar<input type="file" data-eup="${x.id}|${t}" accept="image/*,.pdf"></label>`:''}
+     ${o.id&&o.arquivo?`<button class="btn sm ghost" style="color:var(--bad)" data-delarq="${o.id}" title="Excluir este arquivo" aria-label="Excluir">🗑</button>`:''}</div></div>`}).join('')}
    ${c.etapa<6||x.papel!=='fiador'?`<div class="linkbox"><code>${esc(linkPortal(x.token))}</code><button class="btn sm" data-copyp="${x.id}">Copiar mensagem</button><a class="btn sm ghost" href="${esc(linkPortal(x.token))}" target="_blank" rel="noopener">Ver portal</a></div>`:''}
   </div>`;
 }
